@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.reown.com)",
+      "Bash(pnpm add:*)",
+      "WebFetch(domain:developers.binance.com)",
+      "Bash(npm run dev:*)",
+      "WebFetch(domain:trade.renegade.fi)",
+      "Bash(npm run build:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

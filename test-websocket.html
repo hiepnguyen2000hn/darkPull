@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Binance WebSocket</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #0f0;
+        }
+        #log {
+            white-space: pre-wrap;
+            border: 1px solid #0f0;
+            padding: 10px;
+            height: 500px;
+            overflow-y: auto;
+        }
+        .update { color: #0ff; }
+        .closed { color: #0f0; font-weight: bold; }
+        .error { color: #f00; }
+    </style>
+</head>
+<body>
+    <h1>Binance WebSocket Test - BTC/USDT 1h</h1>
+    <div id="status">Status: Connecting...</div>
+    <div id="log"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+
+        function addLog(msg, className = '') {
+            const time = new Date().toLocaleTimeString();
+            const line = document.createElement('div');
+            line.className = className;
+            line.textContent = `[${time}] ${msg}`;
+            log.appendChild(line);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Connect to Binance WebSocket
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1h');
+
+        ws.onopen = () => {
+            status.textContent = 'Status: ✅ Connected';
+            status.style.color = '#0f0';
+            addLog('WebSocket connected to Binance', 'update');
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.e === 'kline') {
+                const k = data.k;
+                const isClosed = k.x ? '🟢 CLOSED' : '🟡 UPDATING';
+
+                addLog(`${isClosed} | O: ${k.o} | H: ${k.h} | L: ${k.l} | C: ${k.c}`,
+                       k.x ? 'closed' : 'update');
+            }
+        };
+
+        ws.onerror = (error) => {
+            status.textContent = 'Status: ❌ Error';
+            status.style.color = '#f00';
+            addLog('WebSocket error: ' + error, 'error');
+        };
+
+        ws.onclose = () => {
+            status.textContent = 'Status: 🔴 Disconnected';
+            status.style.color = '#f00';
+            addLog('WebSocket disconnected', 'error');
+        };
+    </script>
+</body>
+</html>
