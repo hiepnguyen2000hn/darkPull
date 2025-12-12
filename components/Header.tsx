@@ -3,6 +3,7 @@
 import { HelpCircle } from 'lucide-react';
 import ConnectButton from './ConnectButton';
 import ChainSelector from './ChainSelector';
+import TokenDisplay from './TokenDisplay';
 
 const Header = () => {
     const exchanges = [

@@ -1,12 +1,11 @@
-import { cookieStorage, createStorage } from "wagmi";
-import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
-import { mainnet, arbitrum, polygon, base, optimism } from "@reown/appkit/networks";
+import { http, createConfig } from "wagmi";
+import { mainnet, arbitrum, polygon, base, optimism } from "wagmi/chains";
 
-// Get projectId from https://cloud.reown.com
-export const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
+// Get Privy App ID from environment variables
+export const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
-if (!projectId) {
-  throw new Error("Project ID is not defined");
+if (!privyAppId) {
+  throw new Error("NEXT_PUBLIC_PRIVY_APP_ID is not defined");
 }
 
 // Chain metadata với ảnh
@@ -38,16 +37,14 @@ export const chainMetadata: Record<number, { name: string; imageUrl: string; gra
   }
 };
 
-export const networks = [mainnet, arbitrum, polygon, base, optimism];
-
-// Set up the Wagmi Adapter (Config)
-export const wagmiAdapter = new WagmiAdapter({
-  storage: createStorage({
-    storage: cookieStorage,
-  }),
-  ssr: true,
-  projectId,
-  networks,
+// Wagmi config for Privy
+export const config = createConfig({
+  chains: [mainnet, arbitrum, polygon, base, optimism],
+  transports: {
+    [mainnet.id]: http(),
+    [arbitrum.id]: http(),
+    [polygon.id]: http(),
+    [base.id]: http(),
+    [optimism.id]: http(),
+  },
 });
-
-export const config = wagmiAdapter.wagmiConfig;

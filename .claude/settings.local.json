@@ -6,7 +6,16 @@
       "WebFetch(domain:developers.binance.com)",
       "Bash(npm run dev:*)",
       "WebFetch(domain:trade.renegade.fi)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(pnpm remove:*)",
+      "Bash(pnpm config set:*)",
+      "Bash(npm remove:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

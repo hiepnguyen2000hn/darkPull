@@ -2,7 +2,7 @@
 
 import { useAtomValue } from "jotai";
 import { tradingPairAtom, orderInputAtom, canPlaceOrderAtom } from "@/store/trading";
-import { useAppKitAccount } from "@reown/appkit/react";
+import { usePrivy } from "@privy-io/react-auth";
 import { ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -12,14 +12,14 @@ interface TradeButtonProps {
 }
 
 const TradeButton = ({ className = "", onClick }: TradeButtonProps) => {
-    const { isConnected } = useAppKitAccount();
+    const { authenticated } = usePrivy();
     const pair = useAtomValue(tradingPairAtom);
     const orderInput = useAtomValue(orderInputAtom);
     const canPlaceOrder = useAtomValue(canPlaceOrderAtom);
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleClick = async () => {
-        if (!isConnected || !canPlaceOrder) return;
+        if (!authenticated || !canPlaceOrder) return;
 
         setIsProcessing(true);
         try {
@@ -40,7 +40,7 @@ const TradeButton = ({ className = "", onClick }: TradeButtonProps) => {
     };
 
     // If not connected, this button shouldn't show (ConnectButton will show instead)
-    if (!isConnected) {
+    if (!authenticated) {
         return null;
     }
 

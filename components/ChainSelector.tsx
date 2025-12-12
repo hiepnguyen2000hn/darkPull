@@ -1,6 +1,6 @@
 "use client";
 
-import { useAppKitNetwork } from "@reown/appkit/react";
+import { useSwitchChain, useChainId } from "wagmi";
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 import { chainMetadata } from "@/config";
@@ -11,13 +11,12 @@ interface ChainSelectorProps {
 }
 
 const ChainSelector = ({ className = "" }: ChainSelectorProps) => {
-    const { caipNetwork, switchNetwork } = useAppKitNetwork();
-    console.log(caipNetwork, 'caipNetwork')
+    const chainId = useChainId();
+    const { switchChain } = useSwitchChain();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    const currentChainId = caipNetwork?.id;
-    const currentChain = currentChainId && typeof currentChainId === 'number' ? chainMetadata[currentChainId] : null;
+    const currentChain = chainId ? chainMetadata[chainId] : null;
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -30,12 +29,9 @@ const ChainSelector = ({ className = "" }: ChainSelectorProps) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const handleChainSelect = async (chainId: number) => {
+    const handleChainSelect = async (targetChainId: number) => {
         try {
-            await switchNetwork(caipNetwork?.caipNetworkId ? {
-                ...caipNetwork,
-                id: chainId
-            } as any : undefined);
+            switchChain({ chainId: targetChainId });
             setIsOpen(false);
         } catch (error) {
             console.error("Failed to switch network:", error);
@@ -75,14 +71,14 @@ const ChainSelector = ({ className = "" }: ChainSelectorProps) => {
                         <div className="px-4 py-2 text-xs text-gray-400 font-medium uppercase">
                             Select Network
                         </div>
-                        {Object.entries(chainMetadata).map(([chainId, chain]) => {
-                            const id = parseInt(chainId);
-                            const isActive = currentChainId === id;
+                        {Object.entries(chainMetadata).map(([id, chain]) => {
+                            const targetChainId = parseInt(id);
+                            const isActive = chainId === targetChainId;
 
                             return (
                                 <button
-                                    key={chainId}
-                                    onClick={() => handleChainSelect(id)}
+                                    key={id}
+                                    onClick={() => handleChainSelect(targetChainId)}
                                     className={`w-full flex items-center space-x-3 px-4 py-3 hover:bg-gray-800 transition-colors ${
                                         isActive ? "bg-gray-800" : ""
                                     }`}

@@ -4,7 +4,7 @@ import { ArrowLeftRight, Lock } from 'lucide-react';
 import ConnectButton from './ConnectButton';
 import TradingActionButton from './TradingActionButton';
 import TokenSelector from './TokenSelector';
-import { useAppKitAccount } from "@reown/appkit/react";
+import { usePrivy } from "@privy-io/react-auth";
 import { useAtomValue, useSetAtom } from 'jotai';
 import { orderInputAtom, toggleOrderSideAtom } from '@/store/trading';
 import { useState } from 'react';
@@ -15,7 +15,7 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
-    const { isConnected } = useAppKitAccount();
+    const { authenticated } = usePrivy();
     const orderInput = useAtomValue(orderInputAtom);
     const toggleSide = useSetAtom(toggleOrderSideAtom);
     const [selectedToken, setSelectedToken] = useState('WBTC');
@@ -65,7 +65,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
                         </div>
                     </div>
 
-                    {isConnected ? (
+                    {authenticated ? (
                         <TradingActionButton className="w-full py-4" />
                     ) : (
                         <ConnectButton className="w-full py-4" />
