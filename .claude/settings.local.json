@@ -15,7 +15,10 @@
       "Bash(npm remove:*)",
       "Bash(npm install:*)",
       "Bash(pnpm:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(attrib:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
