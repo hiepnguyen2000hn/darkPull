@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
+  // Use empty turbopack config to silence the warning and continue using webpack
+  turbopack: {},
   typescript: {
     // !! WARN !!
     // Dangerously allow production builds to successfully complete even if
@@ -19,6 +22,46 @@ const nextConfig: NextConfig = {
         hostname: 'avatars.githubusercontent.com',
       },
     ],
+  },
+  serverExternalPackages: [
+    '@aztec/bb.js',
+    '@noir-lang/backend_barretenberg',
+    '@noir-lang/noir_js',
+    '@noir-lang/acvm_js',
+    '@noir-lang/noirc_abi'
+  ],
+  webpack: (config, { isServer }) => {
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'asset/resource',
+      generator: {
+        filename: 'static/wasm/[name].[hash][ext]',
+      },
+    });
+
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@aztec/bb.js': path.resolve(__dirname, 'node_modules/@aztec/bb.js'),
+    };
+
+    // Fallback for node modules that might not be available in the browser
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+        crypto: false,
+      };
+    }
+
+    return config;
   },
 };
 

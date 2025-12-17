@@ -1,16 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { BarretenbergBackend } from '@noir-lang/backend_barretenberg';
-import { Noir } from '@noir-lang/noir_js';
-import { BarretenbergSync, Fr } from '@aztec/bb.js';
-import path from 'path';
-import fs from 'fs/promises';
-import { CIRCUITS_DIR } from '@/lib/server-constants';
-import { TOTAL_TOKEN, MAX_PENDING_ORDER } from '@/lib/constants';
+import { NextRequest, NextResponse } from "next/server";
+import path from "path";
+import fs from "fs/promises";
+import { CIRCUITS_DIR } from "@/lib/server-constants";
+import { TOTAL_TOKEN, MAX_PENDING_ORDER } from "@/lib/constants";
 
 let barretenberg: any = null;
 
 async function getBarretenberg(): Promise<any> {
   if (!barretenberg) {
+    const { BarretenbergSync } = await import("@aztec/bb.js");
     // @ts-ignore - BarretenbergSync.new() works at runtime despite TypeScript errors
     barretenberg = await BarretenbergSync.new();
   }
@@ -19,6 +17,7 @@ async function getBarretenberg(): Promise<any> {
 
 async function poseidon2Hash(inputs: (string | bigint)[]): Promise<string> {
   const bb = await getBarretenberg();
+  const { Fr } = await import("@aztec/bb.js");
 
   const fieldInputs = inputs.map(input => {
     const bigintValue = typeof input === 'string' ? BigInt(input) : input;
@@ -47,11 +46,11 @@ export async function POST(request: NextRequest) {
     }
 
     const startTime = Date.now();
-    console.log('callled generate-wallet-init');
-    console.log('Generating proof for wallet_init_state...', CIRCUITS_DIR);
+    console.log("callled generate-wallet-init");
+    console.log("Generating proof for wallet_init_state...", CIRCUITS_DIR);
 
     // Load circuit
-    const circuitPath = path.join(CIRCUITS_DIR, 'wallet_init_state.json');
+    const circuitPath = path.join(CIRCUITS_DIR, "wallet_init_state.json");
 
     // Check if circuit file exists
     try {
@@ -59,8 +58,8 @@ export async function POST(request: NextRequest) {
     } catch {
       return NextResponse.json(
         {
-          error: 'Circuit file not found',
-          message: `Please ensure wallet_init_state.json exists in ${CIRCUITS_DIR}`
+          error: "Circuit file not found",
+          message: `Please ensure wallet_init_state.json exists in ${CIRCUITS_DIR}`,
         },
         { status: 500 }
       );
@@ -68,9 +67,15 @@ export async function POST(request: NextRequest) {
 
     const circuit = JSON.parse(await fs.readFile(circuitPath, 'utf8'));
 
-    // Initialize Noir
-    const backend = new BarretenbergBackend(circuit);
+    const { BarretenbergBackend } = await import("@noir-lang/backend_barretenberg");
+    const { Noir } = await import("@noir-lang/noir_js");
+
+    // Initialize Noir backend
+    const backend = new BarretenbergBackend(circuit, { threads: 1 });
     const noir = new Noir(circuit);
+
+    // Initialize Noir
+    await noir.init();
 
     const initialNonce = '0';
     const emptyFees = '0';
