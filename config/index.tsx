@@ -1,5 +1,5 @@
 import { http, createConfig } from "wagmi";
-import { mainnet, arbitrum, polygon, base, optimism } from "wagmi/chains";
+import { mainnet, arbitrum, polygon, base, optimism, sepolia } from "wagmi/chains";
 
 // Get Privy App ID from environment variables
 export const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -14,6 +14,11 @@ export const chainMetadata: Record<number, { name: string; imageUrl: string; gra
     name: "Ethereum",
     imageUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
     gradient: "from-blue-500 to-blue-600"
+  },
+  11155111: {
+    name: "Sepolia",
+    imageUrl: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png",
+    gradient: "from-purple-400 to-purple-500"
   },
   42161: {
     name: "Arbitrum",
@@ -39,9 +44,10 @@ export const chainMetadata: Record<number, { name: string; imageUrl: string; gra
 
 // Wagmi config for Privy
 export const config = createConfig({
-  chains: [mainnet, arbitrum, polygon, base, optimism],
+  chains: [mainnet, sepolia, arbitrum, polygon, base, optimism],
   transports: {
     [mainnet.id]: http(),
+    [sepolia.id]: http(),
     [arbitrum.id]: http(),
     [polygon.id]: http(),
     [base.id]: http(),

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { toHex } from "viem";
 import { CIRCUITS_DIR } from "@/lib/server-constants";
 import { TOTAL_TOKEN, MAX_PENDING_ORDER } from "@/lib/constants";
 
@@ -129,11 +130,11 @@ export async function POST(request: NextRequest) {
 
     const totalTime = Date.now() - startTime;
     console.log(`Total wallet_init_state proof generation: ${totalTime}ms (${(totalTime / 1000).toFixed(2)}s)`);
-
+    console.log(proof.proof, 'proof')
     return NextResponse.json({
       success: true,
       verified,
-      proof: Array.from(proof.proof), // Convert Uint8Array to array for JSON serialization
+      proof: toHex(proof.proof), // Convert Uint8Array to hex string using viem
       publicInputs: {
         initial_commitment: initialCommitment
       },
