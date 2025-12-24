@@ -3,8 +3,8 @@ import {useSignTypedData, useChainId} from 'wagmi'
 import type {Address} from 'viem'
 
 export type Permit2Result = {
-    permit2Nonce: number
-    permit2Deadline: number
+    permit2Nonce: bigint
+    permit2Deadline: bigint
     permit2Signature: `0x${string}`
 }
 
@@ -23,13 +23,12 @@ export function usePermit2Signature() {
                                      amount,
                                      spender,
                                  }: SignPermit2Params): Promise<Permit2Result> {
-        const nonce = Math.floor(Date.now() / 1000)
-        const deadline = Math.floor(Date.now() / 1000) + 3600
+        const nonce = BigInt(Math.floor(Date.now() / 1000))
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600)
 
         // EIP‑712 domain của Permit2
         const domain = {
             name: 'Permit2',
-            version: '1',
             chainId,
             verifyingContract: PERMIT2_ADDRESS,
         } as const
