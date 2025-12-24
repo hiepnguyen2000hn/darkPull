@@ -1,24 +1,28 @@
 // usePermit2Signature.ts
-import {useSignTypedData} from 'wagmi'
+import {useSignTypedData, useChainId} from 'wagmi'
 import type {Address} from 'viem'
 
+export type Permit2Result = {
+    permit2Nonce: number
+    permit2Deadline: number
+    permit2Signature: `0x${string}`
+}
 
 type SignPermit2Params = {
     token: Address
     amount: bigint
     spender: Address
-    chainId: number
 }
 const PERMIT2_ADDRESS = '0x76E4C53Fc676A14A3F39eA38bd618eA12BB42603'
 export function usePermit2Signature() {
     const {signTypedDataAsync} = useSignTypedData()
+    const chainId = useChainId()
 
     async function signPermit2FE({
                                      token,
                                      amount,
                                      spender,
-                                     chainId,
-                                 }: SignPermit2Params): Promise<`0x${string}`> {
+                                 }: SignPermit2Params): Promise<Permit2Result> {
         const nonce = Math.floor(Date.now() / 1000)
         const deadline = Math.floor(Date.now() / 1000) + 3600
 
@@ -63,7 +67,11 @@ export function usePermit2Signature() {
             message,
         })
 
-        return signature
+        return {
+            permit2Nonce: nonce,
+            permit2Deadline: deadline,
+            permit2Signature: signature
+        }
     }
 
     return {signPermit2FE}

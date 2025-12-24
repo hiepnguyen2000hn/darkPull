@@ -6,7 +6,7 @@ import ConnectButton from './ConnectButton';
 import ChainSelector from './ChainSelector';
 import TokenDisplay from './TokenDisplay';
 import ProofTestModal from './ProofTestModal';
-import {usePrivy} from '@privy-io/react-auth';
+import {usePrivy, useSignMessage} from '@privy-io/react-auth';
 import {useWallets} from '@privy-io/react-auth';
 import { useProof } from '@/hooks/useProof';
 import { useUSDC } from '@/hooks/useUSDC';
@@ -19,6 +19,7 @@ const Header = () => {
     console.log(signPermit2FE, 'signPermit2FE')
     const {exportWallet} = usePrivy();
     const {wallets} = useWallets();
+    const {signMessage} = useSignMessage();
     const {verifyProof, isVerifying, error} = useProof();
     const {
         approve,
@@ -38,17 +39,18 @@ const Header = () => {
         {name: 'OKX', price: '$0.00', status: 'LIVE'},
     ];
     const handleSign = async() => {
-        if (!chainId) return;
-        const signature = await signPermit2FE({
+        const permit2Data = await signPermit2FE({
             token: '0xeEf56C4d7AB3Bc8420B4B2ae1b5ec6eD7b990e72',
-            amount: 1000000,
-            spender: '0x76E4C53Fc676A14A3F39eA38bd618eA12BB42603',
-            chainId,
+            amount: BigInt(100000000),
+            spender: '0xd24B7d1e3b0eD88bEBe3478fd694c49E3c8e60a7',
         })
+        console.log('Permit2 Data:', permit2Data)
+        return permit2Data
     }
     const hdlApproveUSDC = async () => {
         try {
             exportWallet(); // For debugging purposes
+            return
             if (!isConnected) {
                 alert('Please connect wallet first!');
                 return;
@@ -151,7 +153,7 @@ const Header = () => {
                 alert('Please connect wallet first!');
                 return;
             }
-            const token = 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkNpTTdtQlVGTmJxYWZPcXNGZHlNTnVhMDBVWGVMUldwaVZBSkRQRVd0c3cifQ.eyJzaWQiOiJjbWpnaXI1dW4wMXYzbDgwZGlwZ3A4eTd5IiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NjYzNjk0MzMsImF1ZCI6ImNtajB1eGVzNjAwbmxsNzBjcDlod2Y1ODYiLCJzdWIiOiJkaWQ6cHJpdnk6Y21qYjhlOXdnMDI3cWw3MGU3NzU0NzRqOCIsImV4cCI6MTc2NjQ1NTgzM30.HHm0vXX1hiJDc7qGCJumFdO0AMjGjNOFkAFxzSlht1NBZ7dOEGQa8QGezQA43_AapPVTlyw_1oxzrdFcK0RwOw'
+            const token = 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkNpTTdtQlVGTmJxYWZPcXNGZHlNTnVhMDBVWGVMUldwaVZBSkRQRVd0c3cifQ.eyJzaWQiOiJjbWpqbzBtdmkwMGUzanIwYzd2bTU3dmhmIiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NjY1NTk2NzIsImF1ZCI6ImNtajB1eGVzNjAwbmxsNzBjcDlod2Y1ODYiLCJzdWIiOiJkaWQ6cHJpdnk6Y21qYjhlOXdnMDI3cWw3MGU3NzU0NzRqOCIsImV4cCI6MTc2NjY0NjA3Mn0.dUFsGCl64rWlOI_LffVEkURlvMqJQQPcDIjimYl07HqPN4tX0lk4fCkp8rHLKTdB_FNyGkJB9z2eJ2SfRG4ROQ'
 
             // Fetch user profile to get old state
             console.log('📊 Step 2: Fetching user profile...');
@@ -170,9 +172,9 @@ const Header = () => {
             const profile = await profileResponse.json();
             console.log('✅ Profile loaded:', profile);
 
-            if (!profile.sync) {
-                throw new Error('User not synced yet. Please wait for sync to complete.');
-            }
+            // if (!profile.sync) {
+            //     throw new Error('User not synced yet. Please wait for sync to complete.');
+            // }
 
             // Prepare old state from profile
             const oldState = {
@@ -214,10 +216,24 @@ const Header = () => {
             );
 
             console.log('✅ Proof generated successfully:', proofData);
+            console.log('📋 Public Inputs:', proofData.publicInputs);
 
-            // Verify proof (auto-use operations detected by API)
-            console.log('🔍 Step 4: Verifying proof with auto-detected operations...');
-            handleSign()
+            // Step 4: Sign Permit2
+            console.log('🔍 Step 4: Signing Permit2...');
+            const permit2Data = await handleSign()
+
+            // Step 5: Sign newCommitment with Privy wallet
+            console.log('🔍 Step 5: Signing newCommitment...');
+            const newCommitment = proofData.publicInputs.new_wallet_commitment;
+            console.log('Signing message (newCommitment):', newCommitment, walletAddress);
+
+            const {signature: rootSignature} = await signMessage(
+                {message: newCommitment},
+                {address: walletAddress}
+            );
+            console.log('Root signature:', rootSignature);
+
+            console.log('🔍 Step 6: Verifying proof with Permit2 and root signature...');
             const verifyResult = await verifyProof({
                 proof: proofData.proof,
                 publicInputs: proofData.publicInputs,
@@ -228,12 +244,14 @@ const Header = () => {
                     transfer: {
                         direction: 0,  // 0= deposit, 1 = withdraw
                         token_index: 0, // mock usdc
-                        amount: '100'
+                        amount: '100',
+                        permit2Nonce: permit2Data.permit2Nonce.toString(),
+                        permit2Deadline: permit2Data.permit2Deadline.toString(),
+                        permit2Signature: permit2Data.permit2Signature
                     },
-                    order: [
-                        null, null, null, null
-                    ]
-                }
+                    order: undefined
+                },
+                signature: rootSignature
             });
 
             if (verifyResult.success) {

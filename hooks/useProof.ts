@@ -8,6 +8,9 @@ interface Transfer {
   direction: number;
   token_index: number;
   amount: string;
+  permit2Nonce?: string;
+  permit2Deadline?: string;
+  permit2Signature?: string;
 }
 
 interface OrderData {
@@ -37,6 +40,7 @@ interface VerifyProofParams {
   wallet_address: string;
   randomness: string;
   operations?: Operations;
+  signature?: string;
 }
 
 interface VerifyProofResponse {
@@ -77,7 +81,8 @@ export function useProof() {
       //     token_out: 1
       //   }
       // }
-    }
+    },
+    signature
   }: VerifyProofParams): Promise<VerifyProofResponse> => {
     setIsVerifying(true);
     setError(null);
@@ -97,7 +102,8 @@ export function useProof() {
           circuitName,
           wallet_address,
           randomness,
-          operations
+          operations,
+          signature
         }),
       });
 
