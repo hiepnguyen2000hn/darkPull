@@ -119,7 +119,7 @@ const Header = () => {
                     initial_commitment: proofData.publicInputs.initial_commitment
                 },
                 circuitName: 'wallet_balance_update',
-                wallet_address: walletAddress,
+                wallet_address: walletAddress as string,
                 randomness: proofData.randomness,
             });
 
@@ -192,7 +192,7 @@ const Header = () => {
             // Calculate new state after deposit 100 (no order)
             // Deposit 100 vào available_balances[0] (transfer operation)
             const newState = {
-                available_balances: ['200', '0', '0', '0', '0', '0', '0', '0', '0', '0'], // Deposit vào index 0
+                available_balances: ['300', '0', '0', '0', '0', '0', '0', '0', '0', '0'], // Deposit vào index 0
                 reserved_balances: oldState.reserved_balances, // Giữ nguyên
                 orders_list: oldState.orders_list, // Không thay đổi orders
                 fees: oldState.fees,
