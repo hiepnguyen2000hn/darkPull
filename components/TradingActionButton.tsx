@@ -1,7 +1,10 @@
 "use client";
 
 import { useAtomValue } from "jotai";
-import { tradingPairAtom, orderInputAtom } from "@/store/trading";
+import { tradingPairAtom, orderInputAtom, balancesAtom } from "@/store/trading";
+import { usePrivy, useFundWallet, useWallets } from "@privy-io/react-auth";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
 
 interface TradingActionButtonProps {
     className?: string;
@@ -11,16 +14,61 @@ interface TradingActionButtonProps {
 const TradingActionButton = ({ className = "", onClick }: TradingActionButtonProps) => {
     const pair = useAtomValue(tradingPairAtom);
     const orderInput = useAtomValue(orderInputAtom);
+    const balances = useAtomValue(balancesAtom);
+    const { fundWallet } = useFundWallet();
+    const { wallets } = useWallets();
+    const [isProcessing, setIsProcessing] = useState(false);
 
-    const handleClick = () => {
-        if (onClick) {
-            onClick();
+    const handleClick = async () => {
+
+        setIsProcessing(true);
+        try {
+            // Get embedded wallet address (giống Header.tsx:111)
+            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            console.log('test11111111111111',walletAddress)
+            if (!walletAddress) {
+                console.error("No embedded wallet address found");
+                setIsProcessing(false);
+                return;
+            }
+
+            // Check USDC balance - chỉ cần USDC > 0 là pass
+            const usdcBalance = balances.find((b) => b.token === 'USDC')?.balance || 0;
+
+            console.log('💰 USDC Balance:', usdcBalance);
+
+            // Nếu USDC = 0 → mở popup fund wallet
+            if (usdcBalance === 0) {
+                console.log('❌ USDC balance = 0, opening fund wallet popup...');
+                await fundWallet({
+                    address: walletAddress
+                });
+                setIsProcessing(false);
+                return;
+            }
+
+            console.log('✅ USDC balance > 0, proceeding with trade');
+
+            // Nếu có callback từ parent, gọi callback
+            if (onClick) {
+                await onClick();
+            }
+
+            // Add your trade logic here
+            console.log("Execute trade:", {
+                side: orderInput.side,
+                pair: pair.symbol,
+                amount: orderInput.amount,
+                usdcBalance,
+            });
+
+            // TODO: Implement actual trade execution
+            // Example: call smart contract, call API, generate proof, etc.
+        } catch (error) {
+            console.error("Error in trade action:", error);
+        } finally {
+            setIsProcessing(false);
         }
-        // Add your trade logic here
-        console.log("Execute trade:", {
-            side: orderInput.side,
-            pair: pair.symbol,
-        });
     };
 
     const action = orderInput.side === 'buy' ? 'Buy' : 'Sell';
@@ -28,9 +76,11 @@ const TradingActionButton = ({ className = "", onClick }: TradingActionButtonPro
     return (
         <button
             onClick={handleClick}
-            className={`bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors ${className}`}
+            disabled={isProcessing}
+            className={`bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 ${className}`}
         >
-            {action} {pair.base}
+            {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
+            <span>{action} {pair.base}</span>
         </button>
     );
 };

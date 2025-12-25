@@ -1,6 +1,7 @@
 import ApiClient from './api-client';
+import { getCookie } from './cookies';
 
-// Key để lưu token trong localStorage
+// Key để lưu token trong cookies
 const TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 
@@ -9,10 +10,10 @@ const apiClient = new ApiClient(process.env.NEXT_PUBLIC_API_URL || '', {
   'Content-Type': 'application/json',
 });
 
-// Set token getter - lấy token từ localStorage
+// Set token getter - lấy token từ cookies
 apiClient.setTokenGetter(async () => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return getCookie(TOKEN_KEY);
 });
 
 // Thêm error interceptor để xử lý lỗi và refresh token
@@ -25,7 +26,8 @@ apiClient.addErrorInterceptor(async (error) => {
 
   // Nếu lỗi 401 (Unauthorized), thử refresh token
   if (error.status === 401 && typeof window !== 'undefined') {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const { getCookie: getRefreshCookie, deleteCookie, setCookie } = await import('./cookies');
+    const refreshToken = getRefreshCookie(REFRESH_TOKEN_KEY);
 
     if (refreshToken) {
       try {
@@ -41,18 +43,27 @@ apiClient.addErrorInterceptor(async (error) => {
         if (response.ok) {
           const data = await response.json();
 
-          // Lưu token mới
-          localStorage.setItem(TOKEN_KEY, data.accessToken);
-          if (data.refreshToken) {
-            localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+          // Lưu token mới vào cookies
+          setCookie(TOKEN_KEY, data.access_token || data.accessToken, {
+            expires: 7,
+            secure: true,
+            sameSite: 'Lax',
+          });
+
+          if (data.refresh_token || data.refreshToken) {
+            setCookie(REFRESH_TOKEN_KEY, data.refresh_token || data.refreshToken, {
+              expires: 30,
+              secure: true,
+              sameSite: 'Lax',
+            });
           }
 
           // Có thể retry request cũ ở đây nếu muốn
           console.log('Token refreshed successfully');
         } else {
           // Refresh token failed, xóa tokens và redirect về login
-          localStorage.removeItem(TOKEN_KEY);
-          localStorage.removeItem(REFRESH_TOKEN_KEY);
+          deleteCookie(TOKEN_KEY);
+          deleteCookie(REFRESH_TOKEN_KEY);
 
           if (typeof window !== 'undefined') {
             window.location.href = '/login';
@@ -60,8 +71,8 @@ apiClient.addErrorInterceptor(async (error) => {
         }
       } catch (refreshError) {
         console.error('Failed to refresh token:', refreshError);
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        deleteCookie(TOKEN_KEY);
+        deleteCookie(REFRESH_TOKEN_KEY);
       }
     }
   }
@@ -87,33 +98,47 @@ apiClient.addResponseInterceptor(async (response) => {
 
 // Helper functions để quản lý token
 export const auth = {
-  setTokens: (accessToken: string, refreshToken?: string) => {
+  setTokens: async (accessToken: string, refreshToken?: string) => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(TOKEN_KEY, accessToken);
+    const { setCookie } = await import('./cookies');
+
+    // Lưu access token (expires 7 days)
+    setCookie(TOKEN_KEY, accessToken, {
+      expires: 7,
+      secure: true,
+      sameSite: 'Lax',
+    });
+
+    // Lưu refresh token (expires 30 days)
     if (refreshToken) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      setCookie(REFRESH_TOKEN_KEY, refreshToken, {
+        expires: 30,
+        secure: true,
+        sameSite: 'Lax',
+      });
     }
   },
 
   getToken: () => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(TOKEN_KEY);
+    return getCookie(TOKEN_KEY);
   },
 
   getRefreshToken: () => {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    return getCookie(REFRESH_TOKEN_KEY);
   },
 
-  clearTokens: () => {
+  clearTokens: async () => {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    const { deleteCookie } = await import('./cookies');
+    deleteCookie(TOKEN_KEY);
+    deleteCookie(REFRESH_TOKEN_KEY);
   },
 
   isAuthenticated: () => {
     if (typeof window === 'undefined') return false;
-    return !!localStorage.getItem(TOKEN_KEY);
+    return !!getCookie(TOKEN_KEY);
   },
 };
 

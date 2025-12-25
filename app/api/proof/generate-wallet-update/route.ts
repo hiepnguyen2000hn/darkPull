@@ -164,7 +164,6 @@ export async function POST(request: NextRequest) {
         oldState.orders_list.map(async (order: any) => {
           if (order === null) return '0';
           return await poseidon2Hash([
-            BigInt(order.id || '0'),
             BigInt(order.price || '0'),
             BigInt(order.qty || '0'),
             BigInt(order.side || '0'),
@@ -179,7 +178,6 @@ export async function POST(request: NextRequest) {
         newState.orders_list.map(async (order: any) => {
           if (order === null) return '0';
           return await poseidon2Hash([
-            BigInt(order.id || '0'),
             BigInt(order.price || '0'),
             BigInt(order.qty || '0'),
             BigInt(order.side || '0'),
@@ -244,8 +242,8 @@ export async function POST(request: NextRequest) {
       old_merkle_root: calculatedOldRoot,
       transfer_direction: '0', // 0: deposit, 1: withdraw
       transfer_mint: transfer_mint, // token index for the transfer
-      transfer_amount: '100', // Must match the actual deposit amount
-      operation_type: '0', // 0: transfer only, 1: order only, 2: both
+      transfer_amount: '0', // Must match the actual deposit amount
+      operation_type: '1', // 0: transfer only, 1: order only, 2: both
 
       // Private inputs
       user_secret: user_secret.toString(),
@@ -267,10 +265,10 @@ export async function POST(request: NextRequest) {
       // Operation-specific fields (transfer only, no order)
       transfer_index: transfer_mint, // MUST match transfer_mint
       order_index: '0',
-      order_direction: '0',
-      order_price: '0',
-      order_quantity: '0',
-      order_token_in: '0',
+      order_direction: '1',
+      order_price: '1',
+      order_quantity: '100',
+      order_token_in: '1',
       order_token_out: '0',
       order_operation_type: '0',
     };
@@ -301,7 +299,7 @@ export async function POST(request: NextRequest) {
         amount: '100'
       },
       order: [],
-      operation_type: 0 // Transfer only
+      operation_type: 0// Transfer only
     };
 
     return NextResponse.json({

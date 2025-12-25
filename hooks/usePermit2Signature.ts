@@ -13,7 +13,7 @@ type SignPermit2Params = {
     amount: bigint
     spender: Address
 }
-const PERMIT2_ADDRESS = '0x76E4C53Fc676A14A3F39eA38bd618eA12BB42603'
+const PERMIT2_ADDRESS = '0xAC22c976371e123b8D5B20B7F3079C964cAfaa23'
 export function usePermit2Signature() {
     const {signTypedDataAsync} = useSignTypedData()
     const chainId = useChainId()
@@ -33,8 +33,6 @@ export function usePermit2Signature() {
             verifyingContract: PERMIT2_ADDRESS,
         } as const
 
-        // Kiểu dữ liệu theo SignatureTransfer.PermitTransferFrom
-        // https://docs.uniswap.org/contracts/permit2/reference/signature-transfer
         const types = {
             TokenPermissions: [
                 {name: 'token', type: 'address'},

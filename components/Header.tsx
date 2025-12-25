@@ -12,11 +12,12 @@ import { useProof } from '@/hooks/useProof';
 import { useUSDC } from '@/hooks/useUSDC';
 import { generateWalletUpdateProof } from '@/lib/proof-helpers';
 import { usePermit2Signature } from '@/hooks/usePermit2Signature'
+import {getAllTokens} from "@/lib/services";
+import { useEffect } from 'react';
 const Header = () => {
     const [isProofModalOpen, setIsProofModalOpen] = useState(false);
-    const SPENDER_ADDRESS = '0x76E4C53Fc676A14A3F39eA38bd618eA12BB42603' as `0x${string}`;
+    const SPENDER_ADDRESS = '0x201E43b479Eb8f43bC3C2Ac83575943A9Ea6c85a' as `0x${string}`;
     const { signPermit2FE } = usePermit2Signature();
-    console.log(signPermit2FE, 'signPermit2FE')
     const {exportWallet} = usePrivy();
     const {wallets} = useWallets();
     const {signMessage} = useSignMessage();
@@ -42,21 +43,21 @@ const Header = () => {
         const permit2Data = await signPermit2FE({
             token: '0xeEf56C4d7AB3Bc8420B4B2ae1b5ec6eD7b990e72',
             amount: BigInt(100000000),
-            spender: '0xd24B7d1e3b0eD88bEBe3478fd694c49E3c8e60a7',
+            spender: '0x201E43b479Eb8f43bC3C2Ac83575943A9Ea6c85a',
         })
         console.log('Permit2 Data:', permit2Data)
         return permit2Data
     }
     const hdlApproveUSDC = async () => {
         try {
-            exportWallet(); // For debugging purposes
-            return
+            // exportWallet(); // For debugging purposes
+            // return
             if (!isConnected) {
                 alert('Please connect wallet first!');
                 return;
             }
-
-            const AMOUNT = '140'; // 2 USDC
+            console.log('pass')
+            const AMOUNT = '200'; // 2 USDC
 
             console.log('💰 Current USDC Balance:', balance);
 
@@ -109,8 +110,13 @@ const Header = () => {
             console.log(wallets, 'wallets');
             // Get wallet address
             const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
-            console.log('📍 Step 3: Using wallet address:', wallets);
+            console.log('📍 Step 3: Using wallet address:', proofData);
 
+            const signatureData = await signMessage(
+                {message: proofData.publicInputs.initial_commitment},
+                {address: walletAddress as string}
+            );
+            console.log('Signature data:', signatureData);
             // Verify proof
             console.log('🔍 Step 4: Verifying proof...');
             const verifyResult = await verifyProof({
@@ -121,6 +127,7 @@ const Header = () => {
                 circuitName: 'wallet_balance_update',
                 wallet_address: walletAddress as string,
                 randomness: proofData.randomness,
+                signature: signatureData.signature
             });
 
             if (verifyResult.success) {
@@ -153,7 +160,7 @@ const Header = () => {
                 alert('Please connect wallet first!');
                 return;
             }
-            const token = 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkNpTTdtQlVGTmJxYWZPcXNGZHlNTnVhMDBVWGVMUldwaVZBSkRQRVd0c3cifQ.eyJzaWQiOiJjbWpqbzBtdmkwMGUzanIwYzd2bTU3dmhmIiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NjY1NTk2NzIsImF1ZCI6ImNtajB1eGVzNjAwbmxsNzBjcDlod2Y1ODYiLCJzdWIiOiJkaWQ6cHJpdnk6Y21qYjhlOXdnMDI3cWw3MGU3NzU0NzRqOCIsImV4cCI6MTc2NjY0NjA3Mn0.dUFsGCl64rWlOI_LffVEkURlvMqJQQPcDIjimYl07HqPN4tX0lk4fCkp8rHLKTdB_FNyGkJB9z2eJ2SfRG4ROQ'
+            const token = 'eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkNpTTdtQlVGTmJxYWZPcXNGZHlNTnVhMDBVWGVMUldwaVZBSkRQRVd0c3cifQ.eyJzaWQiOiJjbWpsNmlsYmkwMjhmbDUwZHFjbnBweXExIiwiaXNzIjoicHJpdnkuaW8iLCJpYXQiOjE3NjY2NTEyMDksImF1ZCI6ImNtajB1eGVzNjAwbmxsNzBjcDlod2Y1ODYiLCJzdWIiOiJkaWQ6cHJpdnk6Y21qbDZpbGQ3MDI4aGw1MGRtMjg3NnoxMSIsImV4cCI6MTc2NjczNzYwOX0.yb0XXI9g7OP_uwamUvVvXrbKCHj-0_9ukUs4Ve28otVu-TPYhd1_zpHFcIlRei_E9-i8oBB24YimaP_AZT5OkQ'
 
             // Fetch user profile to get old state
             console.log('📊 Step 2: Fetching user profile...');
@@ -192,9 +199,14 @@ const Header = () => {
             // Calculate new state after deposit 100 (no order)
             // Deposit 100 vào available_balances[0] (transfer operation)
             const newState = {
-                available_balances: ['300', '0', '0', '0', '0', '0', '0', '0', '0', '0'], // Deposit vào index 0
-                reserved_balances: oldState.reserved_balances, // Giữ nguyên
-                orders_list: oldState.orders_list, // Không thay đổi orders
+                available_balances: ['0', '0', '0', '0', '0', '0', '0', '0', '0', '0'], // Deposit vào index 0
+                reserved_balances:  ['100', '0', '0', '0', '0', '0', '0', '0', '0', '0'],
+                orders_list:[
+                    { price: '1', qty: '100', side: 1, token_in: 1, token_out: 0 },
+                    null,
+                    null,
+                    null
+                ], // Không thay đổi orders
                 fees: oldState.fees,
             };
 
@@ -241,15 +253,25 @@ const Header = () => {
                 wallet_address: walletAddress,
                 randomness: proofData.randomness,
                 operations: {
-                    transfer: {
-                        direction: 0,  // 0= deposit, 1 = withdraw
-                        token_index: 0, // mock usdc
-                        amount: '100',
-                        permit2Nonce: permit2Data.permit2Nonce.toString(),
-                        permit2Deadline: permit2Data.permit2Deadline.toString(),
-                        permit2Signature: permit2Data.permit2Signature
-                    },
-                    order: undefined
+                    // transfer: {
+                    //     direction: 0,  // 0= deposit, 1 = withdraw
+                    //     token_index: 0, // mock usdc
+                    //     amount: '100',
+                    //     permit2Nonce: permit2Data.permit2Nonce.toString(),
+                    //     permit2Deadline: permit2Data.permit2Deadline.toString(),
+                    //     permit2Signature: permit2Data.permit2Signature
+                    // },
+                    order: {
+                        "operation_type": 0,
+                        "order_index": 0,
+                        "order_data": {
+                            "price": "1",
+                            "qty": "100",
+                            "side": 0,
+                            "token_in": 0,
+                            "token_out": 1
+                        }
+                    }
                 },
                 signature: rootSignature
             });
@@ -267,6 +289,16 @@ const Header = () => {
             alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
+
+    const fetchTokens = async () => {
+        console.log('call token')
+        const response = await getAllTokens()
+        console.log('Tokens:', response);
+    }
+
+    useEffect(() => {
+        fetchTokens()
+    }, [])
 
 
 

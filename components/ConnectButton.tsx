@@ -1,8 +1,10 @@
 "use client";
 
-import { usePrivy, useLogin } from "@privy-io/react-auth";
-import { Wallet } from "lucide-react";
-import { useEffect } from "react";
+import { usePrivy, useLogin, useLogout } from "@privy-io/react-auth";
+import { Wallet, LogOut, DollarSign, ChevronDown } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { useAtomValue } from "jotai";
+import { balancesAtom } from "@/store/trading";
 import { auth } from "@/lib/api";
 
 interface ConnectButtonProps {
@@ -12,6 +14,10 @@ interface ConnectButtonProps {
 
 const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
     const { authenticated, user, getAccessToken } = usePrivy();
+    const { logout } = useLogout();
+    const balances = useAtomValue(balancesAtom);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     const { login } = useLogin({
         onComplete: async (user, isNewUser, wasAlreadyAuthenticated, loginMethod, loginAccount) => {
@@ -58,12 +64,13 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
                 const data = await response.json();
                 console.log("Backend login response:", data);
 
-                // Lưu token từ backend vào localStorage
-                if (data.accessToken) {
-                    auth.setTokens(data.accessToken, data.refreshToken);
-                    console.log("Backend tokens saved successfully");
+                // Lưu token từ backend vào cookies
+                // API trả về: { access_token: "...", user: {...} }
+                if (data.access_token) {
+                    await auth.setTokens(data.access_token, data.refresh_token);
+                    console.log("Backend tokens saved successfully to cookies");
                 } else {
-                    console.error("No accessToken in backend response");
+                    console.error("No access_token in backend response");
                 }
             } catch (error) {
                 console.error("Error in login complete handler:", error);
@@ -78,12 +85,42 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
         console.log("ConnectButton Debug:", { authenticated, user });
     }, [authenticated, user]);
 
+    // Close dropdown when click outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+
+        if (isDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isDropdownOpen]);
+
     const handleClick = async() => {
         if (onClick) {
             onClick();
         }
         if (!authenticated) {
             login();
+        } else {
+            // Toggle dropdown khi đã authenticated
+            setIsDropdownOpen(!isDropdownOpen);
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await auth.clearTokens();
+            logout();
+            setIsDropdownOpen(false);
+        } catch (error) {
+            console.error("Logout error:", error);
         }
     };
 
@@ -92,17 +129,79 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
         return `${addr.slice(0, 4)}....${addr.slice(-4)}`;
     };
 
+    const formatBalance = (balance: number) => {
+        return balance.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 6,
+        });
+    };
+
     const userAddress = user?.wallet?.address;
+
+    // Calculate total portfolio value
+    const totalValue = balances.reduce((sum, b) => sum + b.usdValue, 0);
 
     if (authenticated && userAddress) {
         return (
-            <button
-                onClick={handleClick}
-                className={`flex items-center space-x-2 px-4 py-2 bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors ${className}`}
-            >
-                <Wallet size={18} />
-                <span className="text-sm">{formatAddress(userAddress)}</span>
-            </button>
+            <div className="relative" ref={dropdownRef}>
+                <button
+                    onClick={handleClick}
+                    className={`flex items-center space-x-2 px-4 py-2 bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors ${className}`}
+                >
+                    <Wallet size={18} />
+                    <span className="text-sm">{formatAddress(userAddress)}</span>
+                    <ChevronDown size={16} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                        {/* Balance Section */}
+                        <div className="p-4 border-b border-gray-700">
+                            <div className="flex items-center space-x-2 text-gray-400 text-xs mb-2">
+                                <DollarSign size={14} />
+                                <span>Portfolio Balance</span>
+                            </div>
+                            <div className="text-white text-2xl font-bold mb-3">
+                                ${formatBalance(totalValue)}
+                            </div>
+
+                            {/* Token Balances */}
+                            <div className="space-y-2">
+                                {balances.map((balance, index) => (
+                                    balance.balance > 0 && (
+                                        <div key={index} className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-400">{balance.token}</span>
+                                            <div className="text-right">
+                                                <div className="text-white font-medium">
+                                                    {formatBalance(balance.balance)}
+                                                </div>
+                                                <div className="text-gray-500 text-xs">
+                                                    ${formatBalance(balance.usdValue)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )
+                                ))}
+                                {balances.length === 0 && (
+                                    <div className="text-gray-500 text-sm text-center py-2">
+                                        No balances yet
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Logout Button */}
+                        <button
+                            onClick={handleLogout}
+                            className="w-full px-4 py-3 flex items-center space-x-2 text-red-400 hover:bg-gray-800 transition-colors"
+                        >
+                            <LogOut size={16} />
+                            <span className="text-sm font-medium">Logout</span>
+                        </button>
+                    </div>
+                )}
+            </div>
         );
     }
 

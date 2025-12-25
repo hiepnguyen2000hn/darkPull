@@ -1,8 +1,8 @@
 "use client";
 
 import { useAtomValue } from "jotai";
-import { tradingPairAtom, orderInputAtom, canPlaceOrderAtom } from "@/store/trading";
-import { usePrivy } from "@privy-io/react-auth";
+import { tradingPairAtom, orderInputAtom, canPlaceOrderAtom, balancesAtom } from "@/store/trading";
+import { useFundWallet, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -12,25 +12,71 @@ interface TradeButtonProps {
 }
 
 const TradeButton = ({ className = "", onClick }: TradeButtonProps) => {
-    const { authenticated } = usePrivy();
     const pair = useAtomValue(tradingPairAtom);
     const orderInput = useAtomValue(orderInputAtom);
     const canPlaceOrder = useAtomValue(canPlaceOrderAtom);
+    const balances = useAtomValue(balancesAtom);
+    const { fundWallet } = useFundWallet();
+    const { wallets } = useWallets();
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleClick = async () => {
-        if (!authenticated || !canPlaceOrder) return;
+        if (!canPlaceOrder) return;
 
         setIsProcessing(true);
         try {
+            // Get embedded wallet address (giống Header.tsx:111)
+            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+
+            if (!walletAddress) {
+                console.error("No embedded wallet address found");
+                setIsProcessing(false);
+                return;
+            }
+
+            // Get balance của token cần check
+            // Nếu BUY -> cần check USDT/quote balance
+            // Nếu SELL -> cần check BTC/base balance
+            let tokenToCheck = orderInput.side === 'buy' ? pair.quote : pair.base;
+
+            // Map USDT → USDC (vì testnet chỉ có USDC, cả 2 đều là stablecoin)
+            if (tokenToCheck === 'USDT') {
+                tokenToCheck = 'USDC';
+                console.log('⚠️ Mapped USDT → USDC (testnet only has USDC)');
+            }
+
+            const balanceObj = balances.find((b) => b.token === tokenToCheck);
+            const balance = balanceObj?.balance || 0;
+
+            console.log('💰 Balance Check:', {
+                side: orderInput.side,
+                originalToken: orderInput.side === 'buy' ? pair.quote : pair.base,
+                mappedToken: tokenToCheck,
+                balance,
+                allBalances: balances,
+            });
+
+            // Check balance - nếu = 0 thì mở popup fund wallet
+            if (balance === 0) {
+                console.log(`❌ Balance của ${tokenToCheck} = 0, opening fund wallet popup...`);
+                await fundWallet({ address: walletAddress });
+                setIsProcessing(false);
+                return;
+            } else {
+                console.log(`✅ Balance sufficient: ${balance} ${tokenToCheck}`);
+            }
+
             if (onClick) {
                 await onClick();
             }
+
             // Add your trade execution logic here
             console.log("Executing trade:", {
                 side: orderInput.side,
                 amount: orderInput.amount,
                 pair: pair.symbol,
+                balance,
+                tokenToCheck,
             });
         } catch (error) {
             console.error("Trade error:", error);
@@ -38,11 +84,6 @@ const TradeButton = ({ className = "", onClick }: TradeButtonProps) => {
             setIsProcessing(false);
         }
     };
-
-    // If not connected, this button shouldn't show (ConnectButton will show instead)
-    if (!authenticated) {
-        return null;
-    }
 
     const isBuy = orderInput.side === "buy";
     const baseToken = pair.base;
