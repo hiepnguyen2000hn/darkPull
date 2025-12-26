@@ -4,12 +4,13 @@ import { useWallets } from '@privy-io/react-auth';
 import { useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import { balancesAtom, type TokenBalance } from '@/store/trading';
+import { MOCK_USDC_ADDRESS } from '@/lib/constants';
 
 // Token configurations
 const TOKENS = [
   {
     symbol: 'USDC',
-    address: '0xeEf56C4d7AB3Bc8420B4B2ae1b5ec6eD7b990e72' as `0x${string}`,
+    address: MOCK_USDC_ADDRESS,
     decimals: 6,
   },
   {

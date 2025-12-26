@@ -136,10 +136,17 @@ export async function login(address: string, signature: string): Promise<{ acces
 // USER SERVICES
 // ============================================
 
-export async function getUserProfile(userId: string): Promise<UserProfile> {
-  const response = await apiClient.get(API_ENDPOINTS.USER.PROFILE, {
-    params: { userId },
-  });
+/**
+ * Get current user profile (authenticated via token in cookies)
+ *
+ * @returns Current user profile
+ *
+ * @example
+ * const profile = await getUserProfile();
+ * console.log(profile.wallet_address);
+ */
+export async function getUserProfile(): Promise<UserProfile> {
+  const response = await apiClient.get(API_ENDPOINTS.USER.PROFILE);
   return response.data;
 }
 

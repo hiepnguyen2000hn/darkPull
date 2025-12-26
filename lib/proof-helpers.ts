@@ -104,7 +104,9 @@ export async function calculateNullifier(
 }
 
 /**
- * Generate wallet update proof (auto-detect operations from state changes)
+ * Generate wallet update proof with operations
+ *
+ * @param operations - Operations object from calculateNewState (transfer/order)
  */
 export async function generateWalletUpdateProof(
   userSecret: string,
@@ -123,6 +125,28 @@ export async function generateWalletUpdateProof(
     reserved_balances: string[];
     orders_list: any[];
     fees: string;
+  },
+  operations?: {  // ✅ Accept operations parameter
+    transfer?: {
+      direction: number;
+      token_index: number;
+      amount: string;
+      permit2Nonce?: string;
+      permit2Deadline?: string;
+      permit2Signature?: string;
+    };
+    order?: {
+      operation_type: number;
+      order_index: number;
+      order_data?: {
+        id: string;
+        price: string;
+        qty: string;
+        side: number;
+        token_in: number;
+        token_out: number;
+      };
+    };
   }
 ): Promise<{
   success: boolean;
@@ -134,7 +158,7 @@ export async function generateWalletUpdateProof(
   new_state: any;
   timing?: any;
 }> {
-  // Call API to generate proof (API will auto-detect operations from state changes)
+  // Call API to generate proof with operations
   const response = await fetch('/api/proof/generate-wallet-update', {
     method: 'POST',
     headers: {
@@ -148,6 +172,7 @@ export async function generateWalletUpdateProof(
       oldHashPath,
       oldState,
       newState,
+      operations,  // ✅ Pass operations to API
     }),
   });
 

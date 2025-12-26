@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useWallets } from '@privy-io/react-auth';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
+import { MOCK_USDC_ADDRESS } from '@/lib/constants';
 
 // USDC Contract Address
-const USDC_ADDRESS = '0xeEf56C4d7AB3Bc8420B4B2ae1b5ec6eD7b990e72';
+const USDC_ADDRESS = MOCK_USDC_ADDRESS;
 
 // USDC Decimals (hardcoded for Sepolia fake USDC)
 const USDC_DECIMALS = 6;

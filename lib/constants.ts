@@ -5,6 +5,19 @@ export const TOTAL_TOKEN = 10; // Số lượng token hỗ trợ trong wallet
 export const MAX_PENDING_ORDER = 4; // Số lượng order tối đa có thể pending
 
 // ============================================
+// CONTRACT ADDRESSES
+// ============================================
+
+// Permit2 contract address
+export const PERMIT2_ADDRESS = process.env.NEXT_PUBLIC_PERMIT2_ADDRESS as `0x${string}`;
+
+// DarkPool Core contract address (Spender/Relayer)
+export const DARKPOOL_CORE_ADDRESS = process.env.NEXT_PUBLIC_DARKPOOL_CORE_ADDRESS as `0x${string}`;
+
+// Mock USDC contract address
+export const MOCK_USDC_ADDRESS = process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS as `0x${string}`;
+
+// ============================================
 // API CONFIGURATION
 // ============================================
 

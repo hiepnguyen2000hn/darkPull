@@ -98,7 +98,8 @@ export async function POST(request: NextRequest) {
       oldMerkleIndex,
       oldHashPath,
       oldState,
-      newState
+      newState,
+      operations  // ✅ Accept operations from request
     } = await request.json();
 
     if (!userSecret || !oldState || !newState) {
@@ -232,18 +233,59 @@ export async function POST(request: NextRequest) {
     console.log('New Commitment:', newCommitment);
     console.log('Nullifier:', nullifier);
 
-    const transfer_mint = '0';
+    // ✅ Extract operations data from request (with defaults)
+    const hasTransfer = operations?.transfer !== undefined;
+    const hasOrder = operations?.order !== undefined;
 
-    // Prepare circuit inputs (hardcoded for deposit 100 only, no order)
+    // Determine operation_type: 0=transfer only, 1=order only, 2=both
+    let operation_type = '0';
+    if (hasTransfer && hasOrder) operation_type = '2';
+    else if (hasOrder) operation_type = '1';
+    else if (hasTransfer) operation_type = '0';
+
+    // Transfer parameters (use from operations or defaults)
+    const transfer_direction = hasTransfer ? operations.transfer.direction.toString() : '0';
+    const transfer_mint = hasTransfer ? operations.transfer.token_index.toString() : '0';
+    const transfer_amount = hasTransfer ? operations.transfer.amount.toString() : '0';
+    const transfer_index = transfer_mint; // MUST match transfer_mint
+
+    // Order parameters (use from operations or defaults)
+    const order_index = hasOrder ? operations.order.order_index.toString() : '0';
+    const order_operation_type = hasOrder ? operations.order.operation_type.toString() : '0';
+    const order_direction = hasOrder && operations.order.order_data
+      ? operations.order.order_data.side.toString()
+      : '0';
+    const order_price = hasOrder && operations.order.order_data
+      ? operations.order.order_data.price.toString()
+      : '0';
+    const order_quantity = hasOrder && operations.order.order_data
+      ? operations.order.order_data.qty.toString()
+      : '0';
+    const order_token_in = hasOrder && operations.order.order_data
+      ? operations.order.order_data.token_in.toString()
+      : '0';
+    const order_token_out = hasOrder && operations.order.order_data
+      ? operations.order.order_data.token_out.toString()
+      : '0';
+
+    console.log('Operations extracted:', {
+      operation_type,
+      hasTransfer,
+      hasOrder,
+      transfer: hasTransfer ? { transfer_direction, transfer_mint, transfer_amount } : null,
+      order: hasOrder ? { order_index, order_operation_type, order_direction, order_price, order_quantity, order_token_in, order_token_out } : null
+    });
+
+    // Prepare circuit inputs
     const inputs = {
       // Public inputs
       old_wallet_commitment: oldCommitment,
       new_wallet_commitment: newCommitment,
       old_merkle_root: calculatedOldRoot,
-      transfer_direction: '0', // 0: deposit, 1: withdraw
-      transfer_mint: transfer_mint, // token index for the transfer
-      transfer_amount: '0', // Must match the actual deposit amount
-      operation_type: '1', // 0: transfer only, 1: order only, 2: both
+      transfer_direction,
+      transfer_mint,
+      transfer_amount,
+      operation_type,
 
       // Private inputs
       user_secret: user_secret.toString(),
@@ -262,17 +304,17 @@ export async function POST(request: NextRequest) {
       new_reserved_balances: newState.reserved_balances.map((b: any) => b.toString()),
       new_orders_list: newOrdersHashes.map((h: any) => h.toString()),
 
-      // Operation-specific fields (transfer only, no order)
-      transfer_index: transfer_mint, // MUST match transfer_mint
-      order_index: '0',
-      order_direction: '1',
-      order_price: '1',
-      order_quantity: '100',
-      order_token_in: '1',
-      order_token_out: '0',
-      order_operation_type: '0',
+      // Operation-specific fields
+      transfer_index,
+      order_index,
+      order_direction,
+      order_price,
+      order_quantity,
+      order_token_in,
+      order_token_out,
+      order_operation_type,
     };
-
+    console.log('Circuit inputs prepared', inputs);
     // Generate witness
     const witnessStartTime = Date.now();
     const { witness } = await noir.execute(inputs);
@@ -291,23 +333,14 @@ export async function POST(request: NextRequest) {
     // Convert publicInputs array to named object
     const namedPublicInputs = publicInputsToObject('wallet_update_state', publicInputs);
 
-    // Build operations object for verification (transfer only)
-    const operations = {
-      transfer: {
-        direction: 0,
-        token_index: 0,
-        amount: '100'
-      },
-      order: [],
-      operation_type: 0// Transfer only
-    };
-
+    // ✅ Return the operations that were used (from input, not hardcoded)
     return NextResponse.json({
       success: true,
+      verified: true,
       proof: toHex(proof),
       publicInputs: namedPublicInputs,
       randomness: newRandomness,
-      operations: operations, // Return operations for verification
+      operations: operations || {}, // Return the input operations
       new_state: {
         available_balances: newState.available_balances.map((b: any) => b.toString()),
         reserved_balances: newState.reserved_balances.map((b: any) => b.toString()),
