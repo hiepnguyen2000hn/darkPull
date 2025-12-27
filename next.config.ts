@@ -23,12 +23,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // ✅ Removed Noir packages to enable client-side proof generation
+  // If you need server-only packages, add them here
   serverExternalPackages: [
-    '@aztec/bb.js',
-    '@noir-lang/backend_barretenberg',
-    '@noir-lang/noir_js',
-    '@noir-lang/acvm_js',
-    '@noir-lang/noirc_abi'
+    // '@aztec/bb.js',  // ← Now available in client
+    // '@noir-lang/backend_barretenberg',  // ← Now available in client
+    // '@noir-lang/noir_js',  // ← Now available in client
   ],
   webpack: (config, { isServer }) => {
     config.experiments = {

@@ -66,7 +66,6 @@ export default function WalletProofExample() {
 
       const data: WalletInitProofResult = await response.json();
       setResult(data);
-      console.log('Proof generated successfully:', data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       setError(errorMessage);

@@ -69,8 +69,11 @@ export interface VerifyProofRequest {
 export interface InitWalletProofRequest {
   proof: string;
   wallet_address: string;
-  randomness: string;
   signature: string;
+  pk_root: string;
+  blinder: string;
+  pk_match: string;
+  sk_match: string;
   publicInputs: {
     initial_commitment: string;
   };

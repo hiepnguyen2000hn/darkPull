@@ -184,6 +184,7 @@ export async function POST(request: NextRequest) {
 
     // Create wallet from private key
     let wallet: ethers.Wallet;
+    console.log(wallet, 'wallet---------------------')
     try {
       wallet = new ethers.Wallet(privateKey);
       console.log(`📍 Wallet address: ${wallet.address}`);

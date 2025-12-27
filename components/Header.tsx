@@ -1,32 +1,38 @@
 "use client";
-import { useSignTypedData } from 'wagmi'
-import { HelpCircle } from 'lucide-react';
-import { useState } from 'react';
+import {useSignTypedData} from 'wagmi'
+import {HelpCircle} from 'lucide-react';
+import {useState} from 'react';
 import ConnectButton from './ConnectButton';
 import ChainSelector from './ChainSelector';
 import TokenDisplay from './TokenDisplay';
 import ProofTestModal from './ProofTestModal';
 import {usePrivy, useSignMessage} from '@privy-io/react-auth';
 import {useWallets} from '@privy-io/react-auth';
-import { useProof } from '@/hooks/useProof';
-import { useUSDC } from '@/hooks/useUSDC';
-import { generateWalletUpdateProof } from '@/lib/proof-helpers';
-import { usePermit2Signature } from '@/hooks/usePermit2Signature'
-import {getAllTokens, getUserProfile} from "@/lib/services";
-import { useEffect } from 'react';
-import { DARKPOOL_CORE_ADDRESS, MOCK_USDC_ADDRESS } from '@/lib/constants';
-import { type OrderAction, type TransferAction, type WalletState } from '@/hooks/useProof';
+import {useProof, useWalletUpdateProof} from '@/hooks/useProof';
+import {useUSDC} from '@/hooks/useUSDC';
+import {usePermit2Signature} from '@/hooks/usePermit2Signature'
+import {getAllTokens, getUserProfile, initWalletProof} from "@/lib/services";
+import {useEffect} from 'react';
+import {DARKPOOL_CORE_ADDRESS, MOCK_USDC_ADDRESS} from '@/lib/constants';
+import {type OrderAction, type TransferAction, type WalletState} from '@/hooks/useProof';
 import {useImportWallet} from '@privy-io/react-auth';
+import {useClientProof} from '@/hooks/useClientProof';
+import {useGenerateWalletInit} from '@/hooks/useGenerateWalletInit';
+import {saveAllKeys, signMessageWithSkRoot} from '@/lib/ethers-signer';
 
 const Header = () => {
     const [isProofModalOpen, setIsProofModalOpen] = useState(false);
     const SPENDER_ADDRESS = DARKPOOL_CORE_ADDRESS;
-    const { signPermit2FE } = usePermit2Signature();
+    const {signPermit2FE} = usePermit2Signature();
     const {exportWallet} = usePrivy();
     const {wallets} = useWallets();
     const {signMessage} = useSignMessage();
+    const {signTypedDataAsync} = useSignTypedData();
     const {verifyProof, isVerifying, error, calculateNewState} = useProof();
     const {importWallet} = useImportWallet();
+    const {deriveKeysFromSignature, generateInitProofClient, isGenerating, progress} = useClientProof();
+    const {generateWalletInit} = useGenerateWalletInit();
+    const {generateWalletUpdateProofClient} = useWalletUpdateProof();
     const {
         approve,
         isApprovePending,
@@ -44,7 +50,7 @@ const Header = () => {
         {name: 'Kraken', price: '$106,149.95', status: 'LIVE'},
         {name: 'OKX', price: '$0.00', status: 'LIVE'},
     ];
-    const handleSign = async() => {
+    const handleSign = async () => {
         const permit2Data = await signPermit2FE({
             token: MOCK_USDC_ADDRESS,
             amount: BigInt(100000000),
@@ -149,10 +155,6 @@ const Header = () => {
         }
     }
 
-
-
-
-
     const hdlUpdateWallet = async () => {
         try {
             console.log('🚀 Step 1: Updating wallet...');
@@ -174,6 +176,7 @@ const Header = () => {
                 reserved_balances: profile.reserved_balances || Array(10).fill('0'),
                 orders_list: profile.orders_list || Array(4).fill(null),
                 fees: profile.fees?.toString() || '0',
+                blinder: profile.blinder,  // ✅ Add blinder from profile
             };
 
             // ✅ Step 2.5: Sign Permit2 TRƯỚC để lấy permit2 data
@@ -185,62 +188,97 @@ const Header = () => {
                 signature: permit2Data.permit2Signature.substring(0, 20) + '...'
             });
 
-            const action: TransferAction = {
-                type: 'transfer',
-                direction: 0,                    // ✅ 0 = DEPOSIT
-                token_index: 0,                  // ✅ Token 0 (USDC)
-                amount: '100',             // 100 USDC (6 decimals)
-                // ✅ Permit2 data từ handleSign
-                permit2Nonce: permit2Data.permit2Nonce.toString(),
-                permit2Deadline: permit2Data.permit2Deadline.toString(),
-                permit2Signature: permit2Data.permit2Signature
+            // const action: TransferAction = {
+            //     type: 'transfer',
+            //     direction: 0,                    // ✅ 0 = DEPOSIT
+            //     token_index: 0,                  // ✅ Token 0 (USDC)
+            //     amount: '100',             // 100 USDC (6 decimals)
+            //     // ✅ Permit2 data từ handleSign
+            //     permit2Nonce: permit2Data.permit2Nonce.toString(),
+            //     permit2Deadline: permit2Data.permit2Deadline.toString(),
+            //     permit2Signature: permit2Data.permit2Signature
+            // };
+
+            // const action: TransferAction = {
+            //     type: 'transfer',
+            //     direction: 1,                    // ✅ 0 = DEPOSIT
+            //     token_index: 0,                  // ✅ Token 0 (USDC)
+            //     amount: '100',             // 100 USDC (6 decimals)
+            //     // ✅ Permit2 data từ handleSign
+            //     permit2Nonce: permit2Data.permit2Nonce.toString(),
+            //     permit2Deadline: permit2Data.permit2Deadline.toString(),
+            //     permit2Signature: permit2Data.permit2Signature
+            // };
+
+            const action: OrderAction = {
+                type: 'order',
+                operation_type: 0,
+                order_index: 1,
+                order_data: {
+                    price: '1',
+                    qty: '100',
+                    side: 1,
+                    token_in: 1,
+                    token_out: 0
+                }
             };
 
-            console.log('🔐 Step 3: Calculating new state...');
-            const { newState, operations } = calculateNewState(oldState, action);
+            // const action: OrderAction = {
+            //     type: 'order',
+            //     operation_type: 1,
+            //     order_index: 1,
+            // };
 
-            console.log('✅ New state calculated:');
+
+            console.log('🔐 Step 3: Calculating new state with new blinder...');
+            // ✅ calculateNewState now derives newBlinder internally
+            const {newState, operations} = await calculateNewState(
+                oldState,
+                action,
+                profile.nonce || 0  // ✅ Pass oldNonce for deriving newBlinder
+            );
+
+            console.log('✅ New state calculated with new blinder:');
             console.log(`  - Available Balances: [${newState.available_balances.slice(0, 3).join(', ')}...]`);
             console.log(`  - Reserved Balances: [${newState.reserved_balances.slice(0, 3).join(', ')}...]`);
             console.log(`  - Orders: ${newState.orders_list.filter((o) => o !== null).length} active orders`);
+            console.log(`  - New Blinder: ${newState.blinder?.substring(0, 20)}...`);
             console.log('  - Operations:', operations);
 
             // Generate proof with operations
             console.log('🔐 Step 4: Generating wallet update proof with operations...');
             const userSecret = '12312';
 
-            const proofData = await generateWalletUpdateProof(
+            // ✅ Use CLIENT-SIDE proof generation
+            const proofData = await generateWalletUpdateProofClient({
                 userSecret,
-                profile.nonce?.toString() || '0',
-                profile.merkle_root,
-                profile.merkle_index,
-                profile.sibling_paths,
+                oldNonce: profile.nonce?.toString() || '0',
+                oldMerkleRoot: profile.merkle_root,
+                oldMerkleIndex: profile.merkle_index,
+                oldHashPath: profile.sibling_paths,
                 oldState,
                 newState,
-                operations  // ✅ Pass operations from calculateNewState
-            );
+                operations
+            });
 
             console.log('✅ Proof generated successfully:', proofData);
             console.log('📋 Public Inputs:', proofData.publicInputs);
 
-            // Step 5: Sign newCommitment with Privy wallet
-            console.log('🔍 Step 5: Signing newCommitment...');
+            // Step 5: Sign newCommitment with ethers (using sk_root from localStorage)
+            console.log('🔍 Step 5: Signing newCommitment with ethers...');
             const newCommitment = proofData.publicInputs.new_wallet_commitment;
-            console.log('Signing message (newCommitment):', newCommitment, walletAddress);
+            console.log('Signing message (newCommitment):', newCommitment);
 
-            const {signature: rootSignature} = await signMessage(
-                {message: newCommitment},
-                {address: walletAddress}
-            );
-            console.log('Root signature:', rootSignature);
+            // ✅ Sign with ethers wallet (sk_root from localStorage)
+            const rootSignature = await signMessageWithSkRoot(newCommitment);
+            console.log('✅ Signature created with ethers!');
+            console.log('  - Root signature:', rootSignature.substring(0, 30) + '...');
 
             console.log('🔍 Step 6: Verifying proof with auto-generated operations...');
             const verifyResult = await verifyProof({
                 proof: proofData.proof,
                 publicInputs: proofData.publicInputs,
-                circuitName: 'wallet_update_state',
                 wallet_address: walletAddress,
-                randomness: proofData.randomness,
                 operations,
                 signature: rootSignature
             });
@@ -259,6 +297,163 @@ const Header = () => {
         }
     };
 
+    // ✅ CLIENT-SIDE PROOF GENERATION (using Noir in browser)
+    const hdlInitWalletClientSide = async () => {
+        try {
+            console.log('🚀🌐 Step 1: CLIENT-SIDE Wallet Init (Noir in Browser)...');
+
+            // Get wallet address
+            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            if (!walletAddress) {
+                alert('Please connect wallet first!');
+                return;
+            }
+
+            const chainId = 11155111; // Sepolia testnet
+
+            const eip712Signature = await signTypedDataAsync({
+                domain: {
+                    name: "Renegade Auth",
+                    version: "1",
+                    chainId
+                },
+                types: {
+                    Auth: [{name: "message", type: "string"}]
+                },
+                primaryType: 'Auth',
+                message: {
+                    message: "Renegade Authentication"
+                }
+            });
+
+            console.log('✅ Step 2: EIP-712 signed!');
+            console.log('  - Signature:', eip712Signature.substring(0, 20) + '...');
+
+            // ============================================
+            // STEP 3: Derive keys CLIENT-SIDE
+            // ============================================
+            console.log('🔑 Step 3: Deriving keys CLIENT-SIDE...');
+
+            const keysResult = await deriveKeysFromSignature(eip712Signature, chainId);
+
+            if (!keysResult.success || !keysResult.keys) {
+                throw new Error(keysResult.error || 'Failed to derive keys');
+            }
+
+            const keys = keysResult.keys;
+            console.log('✅ Step 3: Keys derived CLIENT-SIDE!');
+            console.log('  - sk_root:', keys.sk_root.substring(0, 20) + '...');
+            console.log('  - pk_root.address:', keys.pk_root.address);
+            // console.log('  - pk_root.publicKey:', keys.pk_root.publicKey.substring(0, 20) + '...');
+            console.log('  - pk_match:', keys.pk_match.substring(0, 20) + '...');
+            console.log('  - sk_match:', keys.sk_match.substring(0, 20) + '...');
+            console.log('  - blinder_seed:', keys.blinder_seed.substring(0, 20) + '...');
+
+            // ✅ Save all 4 keys to localStorage for later use
+            saveAllKeys({
+                sk_root: keys.sk_root,
+                pk_root: keys.pk_root.address,
+                pk_match: keys.pk_match,
+                sk_match: keys.sk_match
+            });
+            console.log('💾 All wallet keys saved to localStorage');
+
+            // ============================================
+            // STEP 4: Generate proof CLIENT-SIDE (Browser) - Using useGenerateWalletInit
+            // ============================================
+            console.log('🔐 Step 4: Generating proof CLIENT-SIDE with useGenerateWalletInit (may take 3-8s)...');
+
+            // ✅ Call generateWalletInit with all required params
+            const proofResult = await generateWalletInit({
+                userSecret: "1234",
+                blinder_seed: keys.blinder_seed,
+                pk_root: keys.pk_root.address,
+                pk_match: keys.pk_match,
+                sk_match: keys.sk_match  // ✅ Add sk_match
+            });
+            console.log(proofResult, 'proofResult')
+            if (!proofResult.success) {
+                throw new Error(proofResult.error || 'Failed to generate proof');
+            }
+
+            console.log('✅ Step 4: Proof generated using useGenerateWalletInit!');
+            console.log('  - Proof:', proofResult.proof?.substring(0, 20) + '...');
+            console.log('  - Commitment:', proofResult.publicInputs?.initial_commitment.substring(0, 20) + '...');
+            console.log('  - Randomness:', proofResult.randomness?.substring(0, 20) + '...');
+            console.log('  - Verified:', proofResult.verified);
+            console.log('  - Timing:', proofResult.timing);
+
+            // ============================================
+            // STEP 5: Sign initial commitment with ethers (using sk_root from localStorage)
+            // ============================================
+            console.log('📝 Step 5: Signing initial commitment with ethers...');
+
+            // ✅ Sign with ethers wallet (sk_root from localStorage)
+            const commitmentSignature = await signMessageWithSkRoot(
+                proofResult.publicInputs!.initial_commitment
+            );
+
+            console.log('✅ Step 5: Commitment signed with ethers!');
+            console.log('  - Signature:', commitmentSignature.substring(0, 20) + '...');
+
+            // ============================================
+            // STEP 6: Prepare final payload and call initWalletProof API
+            // ============================================
+            console.log('📦 Step 6: Preparing final payload...');
+
+            const finalPayload = {
+                proof: proofResult.proof!,
+                wallet_address: walletAddress,
+                signature: commitmentSignature, // ✅ ethers returns string directly
+                pk_root: keys.pk_root.address, // ✅ Use Ethereum address from ECDSA wallet
+                blinder: keys.blinder_seed,
+                pk_match: keys.pk_match,
+                sk_match: keys.sk_match,
+                publicInputs: {
+                    initial_commitment: proofResult.publicInputs!.initial_commitment
+                }
+            };
+
+            console.log('✅ Step 6: Final payload prepared:', {
+                proof: finalPayload.proof.substring(0, 30) + '...',
+                wallet_address: finalPayload.wallet_address,
+                signature: finalPayload.signature.substring(0, 30) + '...',
+                pk_root: finalPayload.pk_root,
+                blinder: finalPayload.blinder.substring(0, 30) + '...',
+                pk_match: finalPayload.pk_match.substring(0, 30) + '...',
+                sk_match: finalPayload.sk_match.substring(0, 30) + '...',
+                publicInputs: finalPayload.publicInputs
+            });
+
+            // ============================================
+            // STEP 7: Call initWalletProof API
+            // ============================================
+            console.log('🚀 Step 7: Calling initWalletProof API...');
+
+            const finalResult = await initWalletProof(finalPayload);
+
+            console.log('✅ Step 7: Wallet initialization completed (CLIENT-SIDE)!');
+            console.log('Final result:', finalResult);
+
+            alert(
+                `🌐 CLIENT-SIDE Wallet Init Success! ✅\n\n` +
+                `Address: ${walletAddress}\n` +
+                `Proof: ${proofResult.proof?.substring(0, 30)}...\n` +
+                `Signature: ${commitmentSignature.substring(0, 30)}...\n` +
+                `Verified: ${proofResult.verified}\n` +
+                `Total time: ${proofResult.timing?.total}ms\n\n` +
+                `✨ Proof generated in BROWSER!\n` +
+                `✨ Private key NEVER left wallet!\n\n` +
+                `Check console for full details!`
+            );
+
+        } catch (error) {
+            console.error('❌ Error in CLIENT-SIDE wallet init:', error);
+            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    };
+
+    // ✅ SERVER-SIDE PROOF GENERATION (Original V2 - using backend API)
     const hdlInitWalletV2 = async () => {
         try {
             console.log('🚀 Step 1: Initializing wallet with V2 API...');
@@ -417,7 +612,6 @@ const Header = () => {
     }, [])
 
 
-
     return (
         <header className="border-b border-gray-800 bg-black">
             <div className="flex items-center justify-between px-6 py-4">
@@ -446,15 +640,6 @@ const Header = () => {
                         </span>
                     </button>
                     <button
-                        onClick={hdlInitProof}
-                        disabled={isVerifying}
-                        className="flex items-center space-x-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Test Wallet Proof API"
-                    >
-                        {/*<Flask size={16} />*/}
-                        <span>{isVerifying ? 'Verifying...' : 'Test Proof API'}</span>
-                    </button>
-                    <button
                         onClick={hdlUpdateWallet}
                         disabled={isVerifying}
                         className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -463,15 +648,15 @@ const Header = () => {
                         <span>{isVerifying ? 'Updating...' : 'Wallet Update'}</span>
                     </button>
                     <button
-                        onClick={hdlInitWalletV2}
-                        disabled={isVerifying || !isConnected}
-                        className="flex items-center space-x-2 px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Init Wallet V2 (EIP-712)"
+                        onClick={hdlInitWalletClientSide}
+                        disabled={isGenerating || !isConnected}
+                        className="flex items-center space-x-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Init Wallet (CLIENT-SIDE - Noir in Browser)"
                     >
-                        <span>{isVerifying ? 'Initializing...' : 'Init Wallet V2'}</span>
+                        <span>{isGenerating ? (progress || 'Generating...') : '🌐 Client-Side Init'}</span>
                     </button>
-                    <ChainSelector />
-                    <ConnectButton />
+                    <ChainSelector/>
+                    <ConnectButton/>
                 </div>
             </div>
 

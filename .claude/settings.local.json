@@ -31,7 +31,10 @@
       "Bash(else echo \"Directory does not exist\")",
       "Bash(fi)",
       "Bash(cat:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(if [ -d \"circuits\" ])",
+      "Bash(then ls -la circuits/)",
+      "Bash(else echo \"No circuits directory\")"
     ],
     "deny": [],
     "ask": []

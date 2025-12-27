@@ -45,6 +45,9 @@ export const API_ENDPOINTS = {
     VERIFY: `${API_PREFIX}/proofs/verify`,
     INIT_WALLET: `${API_PREFIX}/proofs/init-wallet`,
     UPDATE_WALLET: `${API_PREFIX}/proofs/update-wallet`,
+    TRANSFER: `${API_PREFIX}/balance/transfer`,  // ✅ Fixed typo: blance → balance
+    CREATE_ORDER: `${API_PREFIX}/order/create`,
+    CANCEL_ORDER: `${API_PREFIX}/order/cancel`,
     GENERATE_WALLET_INIT: '/api/proof/generate-wallet-init',
     GENERATE_WALLET_UPDATE: '/api/proof/generate-wallet-update',
   },

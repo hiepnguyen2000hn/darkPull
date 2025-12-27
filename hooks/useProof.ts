@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { TOTAL_TOKEN, MAX_PENDING_ORDER } from '@/lib/constants';
+import { TOTAL_TOKEN, MAX_PENDING_ORDER, API_ENDPOINTS } from '@/lib/constants';
+import apiClient from '@/lib/api';  // ✅ Import apiClient
 
 // ============================================
 // TYPE DEFINITIONS FOR calculateNewState
@@ -11,6 +12,7 @@ export interface WalletState {
   reserved_balances: string[];   // Array of 10 token balances
   orders_list: (OrderInState | null)[];  // Array of 4 orders
   fees: string;
+  blinder?: string;  // ✅ Add blinder (optional for backwards compatibility)
 }
 
 // Order in state (without id, since id is only for API)
@@ -122,7 +124,8 @@ function deepCloneState(state: WalletState): WalletState {
     orders_list: state.orders_list.map(order =>
       order === null ? null : { ...order }
     ),
-    fees: state.fees
+    fees: state.fees,
+    ...(state.blinder && { blinder: state.blinder })  // ✅ Copy blinder if exists
   };
 }
 
@@ -380,6 +383,25 @@ function generateOrderId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
 
+/**
+ * Derive new blinder from old blinder and new nonce
+ * Uses Poseidon2 hash (matches backend test file)
+ */
+export async function deriveNewBlinder(oldBlinder: string, newNonce: string): Promise<string> {
+  // Import Barretenberg and Fr for Poseidon2 hash
+  const { BarretenbergSync } = await import("@aztec/bb.js");
+  const { Fr } = await import("@aztec/bb.js");
+
+  // @ts-ignore
+  const bb = await BarretenbergSync.new();
+
+  // Hash [oldBlinder, newNonce]
+  const inputs = [new Fr(BigInt(oldBlinder)), new Fr(BigInt(newNonce))];
+  const result = bb.poseidon2Hash(inputs);
+
+  return result.toString();
+}
+
 // ============================================
 // MAIN FUNCTION: calculateNewState
 // ============================================
@@ -389,22 +411,23 @@ function generateOrderId(): string {
  *
  * @param oldState - Current wallet state
  * @param action - Action to apply (transfer, order, or combined)
+ * @param oldNonce - Current nonce (required for deriving new blinder)
  * @returns New state and operations object ready for proof verification
  *
  * @throws Error if validation fails or insufficient balance
  *
  * @example
  * // Deposit example
- * const { newState, operations } = calculateNewState(oldState, {
+ * const { newState, operations } = await calculateNewState(oldState, {
  *   type: 'transfer',
  *   direction: 0,
  *   token_index: 0,
  *   amount: '100000000'
- * });
+ * }, oldNonce);
  *
  * @example
  * // Create order example
- * const { newState, operations } = calculateNewState(oldState, {
+ * const { newState, operations } = await calculateNewState(oldState, {
  *   type: 'order',
  *   operation_type: 0,
  *   order_index: 0,
@@ -415,12 +438,13 @@ function generateOrderId(): string {
  *     token_in: 1,
  *     token_out: 0
  *   }
- * });
+ * }, oldNonce);
  */
-export function calculateNewState(
+export async function calculateNewState(
   oldState: WalletState,
-  action: TransferAction | OrderAction | CombinedAction
-): CalculateNewStateResult {
+  action: TransferAction | OrderAction | CombinedAction,
+  oldNonce: number | string
+): Promise<CalculateNewStateResult> {
   // Step 1: Validate state structure
   validateStateStructure(oldState);
 
@@ -442,7 +466,19 @@ export function calculateNewState(
     throw new Error(`[calculateNewState] Invalid action type: ${(action as any).type}`);
   }
 
-  // Step 5: Return result
+  // Step 5: Derive new blinder (matches backend test file)
+  const newNonce = Number(oldNonce) + 1;
+  const oldBlinder = oldState.blinder || '0';
+  const newBlinder = await deriveNewBlinder(oldBlinder, String(newNonce));
+  newState.blinder = newBlinder;  // ✅ Set new blinder
+
+  console.log('✅ [calculateNewState] New blinder derived:');
+  console.log(`  - Old Nonce: ${oldNonce}`);
+  console.log(`  - New Nonce: ${newNonce}`);
+  console.log(`  - Old Blinder: ${oldBlinder.substring(0, 20)}...`);
+  console.log(`  - New Blinder: ${newBlinder.substring(0, 20)}...`);
+
+  // Step 6: Return result
   return { newState, operations };
 }
 
@@ -487,37 +523,32 @@ export function useProof() {
     setIsVerifying(true);
     setError(null);
 
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:4953';
-
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/proofs/update-wallet`, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json',
-          'Content-Type': 'application/json',
+      // ✅ Use apiClient instead of fetch() - automatically adds Authorization token
+      const response = await apiClient.post(API_ENDPOINTS.PROOF.CREATE_ORDER, {
+        proof,
+        wallet_address,
+        signature,
+        publicInputs,
+        "order_index": operations.order.order_index,
+        "order_data": {
+          "price": operations.order.order_data.price,
+          "qty": operations.order.order_data.qty,
+          "side": operations.order.order_data.side,
+          "token_in": operations.order.order_data.token_in,
+          "token_out": operations.order.order_data.token_out,
         },
-        body: JSON.stringify({
-          proof,
-          publicInputs,
-          // circuitName,
-          wallet_address,
-          randomness,
-          operations,
-          signature
-        }),
+        transfer: operations.transfer,
+        // "order_indices": [
+        //   1
+        // ]
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
       setIsVerifying(false);
       return {
         success: true,
-        verified: data.verified,
-        ...data,
+        verified: response.data.verified,
+        ...response.data,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -537,3 +568,8 @@ export function useProof() {
     calculateNewState,
   };
 }
+
+// ============================================
+// RE-EXPORT CLIENT-SIDE WALLET UPDATE PROOF
+// ============================================
+export { useWalletUpdateProof } from './useWalletUpdateProof';

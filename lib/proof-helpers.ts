@@ -108,7 +108,7 @@ export async function calculateNullifier(
  *
  * @param operations - Operations object from calculateNewState (transfer/order)
  */
-export async function generateWalletUpdateProof(
+export async function  generateWalletUpdateProof(
   userSecret: string,
   oldNonce: string,
   oldMerkleRoot: string,
