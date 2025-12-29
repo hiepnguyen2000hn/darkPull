@@ -19,12 +19,13 @@ import {useImportWallet} from '@privy-io/react-auth';
 import {useClientProof} from '@/hooks/useClientProof';
 import {useGenerateWalletInit} from '@/hooks/useGenerateWalletInit';
 import {saveAllKeys, signMessageWithSkRoot} from '@/lib/ethers-signer';
+import {extractPrivyWalletId} from '@/lib/wallet-utils';
 
 const Header = () => {
     const [isProofModalOpen, setIsProofModalOpen] = useState(false);
     const SPENDER_ADDRESS = DARKPOOL_CORE_ADDRESS;
     const {signPermit2FE} = usePermit2Signature();
-    const {exportWallet} = usePrivy();
+    const {exportWallet, user} = usePrivy();
     const {wallets} = useWallets();
     const {signMessage} = useSignMessage();
     const {signTypedDataAsync} = useSignTypedData();
@@ -166,9 +167,20 @@ const Header = () => {
                 return;
             }
 
-            // Fetch user profile to get old state (using API client with token from cookies)
+            // Get Privy user ID
+            if (!user?.id) {
+                alert('Please authenticate with Privy first!');
+                return;
+            }
+
+            // ✅ Extract wallet_id from Privy user ID (remove "did:privy:" prefix)
+            const walletId = extractPrivyWalletId(user.id);
+
+            // Fetch user profile to get old state (using API client with wallet_id)
             console.log('📊 Step 2: Fetching user profile...');
-            const profile = await getUserProfile();
+            console.log('  - Full Privy user ID:', user.id);
+            console.log('  - Wallet ID (without prefix):', walletId);
+            const profile = await getUserProfile(walletId);
             console.log('✅ Profile loaded:', profile);
 
             const oldState: WalletState = {
@@ -188,16 +200,16 @@ const Header = () => {
                 signature: permit2Data.permit2Signature.substring(0, 20) + '...'
             });
 
-            // const action: TransferAction = {
-            //     type: 'transfer',
-            //     direction: 0,                    // ✅ 0 = DEPOSIT
-            //     token_index: 0,                  // ✅ Token 0 (USDC)
-            //     amount: '100',             // 100 USDC (6 decimals)
-            //     // ✅ Permit2 data từ handleSign
-            //     permit2Nonce: permit2Data.permit2Nonce.toString(),
-            //     permit2Deadline: permit2Data.permit2Deadline.toString(),
-            //     permit2Signature: permit2Data.permit2Signature
-            // };
+            const action: TransferAction = {
+                type: 'transfer',
+                direction: 0,                    // ✅ 0 = DEPOSIT
+                token_index: 0,                  // ✅ Token 0 (USDC)
+                amount: '100',             // 100 USDC (6 decimals)
+                // ✅ Permit2 data từ handleSign
+                permit2Nonce: permit2Data.permit2Nonce.toString(),
+                permit2Deadline: permit2Data.permit2Deadline.toString(),
+                permit2Signature: permit2Data.permit2Signature
+            };
 
             // const action: TransferAction = {
             //     type: 'transfer',
@@ -210,23 +222,23 @@ const Header = () => {
             //     permit2Signature: permit2Data.permit2Signature
             // };
 
-            const action: OrderAction = {
-                type: 'order',
-                operation_type: 0,
-                order_index: 1,
-                order_data: {
-                    price: '1',
-                    qty: '100',
-                    side: 1,
-                    token_in: 1,
-                    token_out: 0
-                }
-            };
+            // const action: OrderAction = {
+            //     type: 'order',
+            //     operation_type: 0,
+            //     order_index: 1,
+            //     order_data: {
+            //         price: '1',
+            //         qty: '100',
+            //         side: 1,
+            //         token_in: 1,
+            //         token_out: 0
+            //     }
+            // };
 
             // const action: OrderAction = {
             //     type: 'order',
             //     operation_type: 1,
-            //     order_index: 1,
+            //     order_index: 3,
             // };
 
 
@@ -301,7 +313,8 @@ const Header = () => {
     const hdlInitWalletClientSide = async () => {
         try {
             console.log('🚀🌐 Step 1: CLIENT-SIDE Wallet Init (Noir in Browser)...');
-
+            // exportWallet(); //
+            // return
             // Get wallet address
             const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
             if (!walletAddress) {
@@ -322,7 +335,7 @@ const Header = () => {
                 },
                 primaryType: 'Auth',
                 message: {
-                    message: "Renegade Authentication"
+                    message: "Renegade Authentication ver3"
                 }
             });
 
@@ -400,6 +413,7 @@ const Header = () => {
             // STEP 6: Prepare final payload and call initWalletProof API
             // ============================================
             console.log('📦 Step 6: Preparing final payload...');
+            const walletId = extractPrivyWalletId(user.id);
 
             const finalPayload = {
                 proof: proofResult.proof!,
@@ -411,7 +425,9 @@ const Header = () => {
                 sk_match: keys.sk_match,
                 publicInputs: {
                     initial_commitment: proofResult.publicInputs!.initial_commitment
-                }
+                },
+                wallet_id: walletId,
+
             };
 
             console.log('✅ Step 6: Final payload prepared:', {

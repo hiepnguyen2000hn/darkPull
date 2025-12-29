@@ -279,24 +279,25 @@ function processOrder(
     }
 
     // Calculate reservation amount based on side
+    // NOTE: token_out = token trả (token you pay), token_in = token nhận (token you receive)
     if (side === 0) {
-      // BUY: reserve price * qty in token_in
+      // BUY: reserve price * qty in token_out (token trả)
       const reserveAmount = priceBI * qtyBI;
-      const availableBalance = BigInt(newState.available_balances[token_in]);
-
+      const availableBalance = BigInt(newState.available_balances[token_out]);
+      console.log(availableBalance, 'availableBalance token_out', token_out, 'reserveAmount', reserveAmount)
       if (availableBalance < reserveAmount) {
         throw new Error(
-          `[calculateNewState] Insufficient balance for BUY order: have ${availableBalance}, need ${reserveAmount} in token ${token_in}`
+          `[calculateNewState] Insufficient balance for BUY order: have ${availableBalance}, need ${reserveAmount} in token ${token_out}`
         );
       }
 
       // Move from available to reserved
-      newState.available_balances[token_in] = (availableBalance - reserveAmount).toString();
-      newState.reserved_balances[token_in] = (
-        BigInt(newState.reserved_balances[token_in]) + reserveAmount
+      newState.available_balances[token_out] = (availableBalance - reserveAmount).toString();
+      newState.reserved_balances[token_out] = (
+        BigInt(newState.reserved_balances[token_out]) + reserveAmount
       ).toString();
     } else {
-      // SELL: reserve qty in token_out
+      // SELL: reserve qty in token_out (token trả/bán)
       const availableBalance = BigInt(newState.available_balances[token_out]);
 
       if (availableBalance < qtyBI) {
@@ -338,14 +339,15 @@ function processOrder(
     const qtyBI = BigInt(qty);
 
     // Release reserved balance based on side
+    // NOTE: token_out = token trả (token you paid), token_in = token nhận (token you received)
     if (side === 0) {
-      // BUY: release price * qty from reserved_balances[token_in]
+      // BUY: release price * qty from reserved_balances[token_out]
       const releaseAmount = priceBI * qtyBI;
-      newState.reserved_balances[token_in] = (
-        BigInt(newState.reserved_balances[token_in]) - releaseAmount
+      newState.reserved_balances[token_out] = (
+        BigInt(newState.reserved_balances[token_out]) - releaseAmount
       ).toString();
-      newState.available_balances[token_in] = (
-        BigInt(newState.available_balances[token_in]) + releaseAmount
+      newState.available_balances[token_out] = (
+        BigInt(newState.available_balances[token_out]) + releaseAmount
       ).toString();
     } else {
       // SELL: release qty from reserved_balances[token_out]
@@ -505,18 +507,6 @@ export function useProof() {
       order: [
 
       ],
-      // order: {
-      //   operation_type: 0,
-      //   order_index: 0,
-      //   order_data: {
-      //     id: "12345",
-      //     price: "1000000000000000000",
-      //     qty: "5000000000000000000",
-      //     side: 0,
-      //     token_in: 0,
-      //     token_out: 1
-      //   }
-      // }
     },
     signature
   }: VerifyProofParams): Promise<VerifyProofResponse> => {
@@ -525,19 +515,19 @@ export function useProof() {
 
     try {
       // ✅ Use apiClient instead of fetch() - automatically adds Authorization token
-      const response = await apiClient.post(API_ENDPOINTS.PROOF.CREATE_ORDER, {
+      const response = await apiClient.post(API_ENDPOINTS.PROOF.TRANSFER, {
         proof,
         wallet_address,
         signature,
         publicInputs,
-        "order_index": operations.order.order_index,
-        "order_data": {
-          "price": operations.order.order_data.price,
-          "qty": operations.order.order_data.qty,
-          "side": operations.order.order_data.side,
-          "token_in": operations.order.order_data.token_in,
-          "token_out": operations.order.order_data.token_out,
-        },
+        // "order_index": operations.order.order_index,
+        // "order_data": {
+        //   "price": operations.order.order_data.price,
+        //   "qty": operations.order.order_data.qty,
+        //   "side": operations.order.order_data.side,
+        //   "token_in": operations.order.order_data.token_in,
+        //   "token_out": operations.order.order_data.token_out,
+        // },
         transfer: operations.transfer,
         // "order_indices": [
         //   1
@@ -561,8 +551,103 @@ export function useProof() {
     }
   };
 
+  // ✅ Submit order to CREATE_ORDER endpoint
+  const submitOrder = async ({
+    proof,
+    publicInputs,
+    wallet_address,
+    operations,
+    signature
+  }: VerifyProofParams): Promise<VerifyProofResponse> => {
+    setIsVerifying(true);
+    setError(null);
+
+    try {
+      // Extract order data from operations
+      if (!operations.order) {
+        throw new Error('Order data is required for submitOrder');
+      }
+
+      // ✅ Call CREATE_ORDER endpoint with order-specific body
+      const response = await apiClient.post(API_ENDPOINTS.PROOF.CREATE_ORDER, {
+        proof,
+        wallet_address,
+        signature,
+        publicInputs,
+        order_index: operations.order.order_index,
+        order_data: {
+          price: operations.order.order_data.price,
+          qty: operations.order.order_data.qty,
+          side: operations.order.order_data.side,
+          token_in: operations.order.order_data.token_in,
+          token_out: operations.order.order_data.token_out,
+        }
+      });
+
+      setIsVerifying(false);
+      return {
+        success: true,
+        verified: response.data.verified,
+        ...response.data,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      setIsVerifying(false);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  };
+
+  // ✅ Cancel order to CANCEL_ORDER endpoint
+  const cancelOrder = async ({
+    proof,
+    publicInputs,
+    wallet_address,
+    operations,
+    signature
+  }: VerifyProofParams): Promise<VerifyProofResponse> => {
+    setIsVerifying(true);
+    setError(null);
+
+    try {
+      // Extract order index from operations
+      if (!operations.order) {
+        throw new Error('Order data is required for cancelOrder');
+      }
+
+      // ✅ Call CANCEL_ORDER endpoint with order_indices body
+      const response = await apiClient.post(API_ENDPOINTS.PROOF.CANCEL_ORDER, {
+        proof,
+        wallet_address,
+        signature,
+        publicInputs,
+        order_indices: [operations.order.order_index]
+      });
+
+      setIsVerifying(false);
+      return {
+        success: true,
+        verified: response.data.verified,
+        ...response.data,
+      };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      setIsVerifying(false);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  };
+
   return {
     verifyProof,
+    submitOrder,
+    cancelOrder,
     isVerifying,
     error,
     calculateNewState,

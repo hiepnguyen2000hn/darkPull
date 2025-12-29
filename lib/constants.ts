@@ -36,7 +36,7 @@ export const API_ENDPOINTS = {
 
   // User
   USER: {
-    PROFILE: `${API_PREFIX}/user/profile`,
+    PROFILE: `${API_PREFIX}/user/:id/profile`,
     UPDATE_PROFILE: `${API_PREFIX}/user/profile`,
   },
 
@@ -50,6 +50,11 @@ export const API_ENDPOINTS = {
     CANCEL_ORDER: `${API_PREFIX}/order/cancel`,
     GENERATE_WALLET_INIT: '/api/proof/generate-wallet-init',
     GENERATE_WALLET_UPDATE: '/api/proof/generate-wallet-update',
+  },
+
+  // Order
+  ORDER: {
+    LIST: `${API_PREFIX}/order/:wallet_id/list`,
   },
 
   // Token

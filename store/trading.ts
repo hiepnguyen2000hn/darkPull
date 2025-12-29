@@ -238,6 +238,17 @@ export const toggleOrderSideAtom = atom(
   }
 );
 
+// Update limit price
+export const updateLimitPriceAtom = atom(
+  null,
+  (get, set, limitPrice: string) => {
+    set(orderInputAtom, {
+      ...get(orderInputAtom),
+      limitPrice,
+    });
+  }
+);
+
 // Set percentage of balance
 export const setPercentageAtom = atom(
   null,

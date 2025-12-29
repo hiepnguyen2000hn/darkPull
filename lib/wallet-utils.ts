@@ -280,3 +280,19 @@ export function publicInputsToObject(
 
   return result;
 }
+
+/**
+ * Extract wallet ID from Privy user ID
+ *
+ * Removes the "did:privy:" prefix from Privy user ID
+ *
+ * @param privyUserId - Full Privy user ID (e.g., "did:privy:clp5...abc123")
+ * @returns Wallet ID without prefix (e.g., "clp5...abc123")
+ *
+ * @example
+ * const walletId = extractPrivyWalletId("did:privy:clp5abc123");
+ * console.log(walletId); // "clp5abc123"
+ */
+export function extractPrivyWalletId(privyUserId: string): string {
+  return privyUserId.replace('did:privy:', '');
+}

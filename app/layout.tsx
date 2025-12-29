@@ -4,6 +4,7 @@ import "./globals.css";
 import { headers } from "next/headers";
 import ContextProvider from "@/context";
 import { JotaiProvider } from "@/providers/JotaiProvider";
+import { PreloadTokenIcons } from "@/components/PreloadTokenIcons";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <PreloadTokenIcons />
         <JotaiProvider>
           <ContextProvider cookies={cookies}>{children}</ContextProvider>
         </JotaiProvider>

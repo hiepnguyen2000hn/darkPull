@@ -19,6 +19,20 @@ export interface Token {
   decimals: number;
 }
 
+export interface Order {
+  status: number;    // Order status: 0=open, 4=cancelled, etc.
+  side: number;      // 0=buy, 1=sell
+  asset: number;     // Token index
+  order_value: number;
+  size: number;
+  filled: number;
+  time: string;      // ISO 8601 timestamp
+}
+
+export interface OrderListResponse {
+  data: Order[];
+}
+
 export interface UserProfile {
   _id: string;
   wallet_address: string;
@@ -142,14 +156,17 @@ export async function login(address: string, signature: string): Promise<{ acces
 /**
  * Get current user profile (authenticated via token in cookies)
  *
+ * @param wallet_id - Privy user ID (without "did:privy:" prefix)
  * @returns Current user profile
  *
  * @example
- * const profile = await getUserProfile();
+ * const profile = await getUserProfile('clp5abc123');
  * console.log(profile.wallet_address);
  */
-export async function getUserProfile(): Promise<UserProfile> {
-  const response = await apiClient.get(API_ENDPOINTS.USER.PROFILE);
+export async function getUserProfile(wallet_id: string): Promise<UserProfile> {
+  // Replace :id in endpoint with wallet_id
+  const endpoint = API_ENDPOINTS.USER.PROFILE.replace(':id', wallet_id);
+  const response = await apiClient.get(endpoint);
   return response.data;
 }
 
@@ -286,6 +303,46 @@ export async function initWalletProof(data: InitWalletProofRequest): Promise<any
  */
 export async function updateWalletProof(data: UpdateWalletProofRequest): Promise<any> {
   const response = await apiClient.post(API_ENDPOINTS.PROOF.UPDATE_WALLET, data);
+  return response.data;
+}
+
+// ============================================
+// ORDER SERVICES
+// ============================================
+
+/**
+ * Get order list with pagination and filters
+ *
+ * @param wallet_id Wallet ID (extracted from Privy user ID)
+ * @param params Query parameters
+ * @param params.page Page number (default: 1)
+ * @param params.limit Items per page (default: 20)
+ * @param params.status Order status filter - array of numbers or strings (e.g., [0, 1] or ["Created", "Matching"])
+ * @param params.side Order side filter (0=buy, 1=sell)
+ * @param params.token Token filter
+ * @param params.from_date Filter from date (ISO 8601)
+ * @param params.to_date Filter to date (ISO 8601)
+ *
+ * @example
+ * const walletId = extractPrivyWalletId(user.id);
+ * const orders = await getOrderList(walletId, { page: 1, limit: 20 });
+ * const filteredOrders = await getOrderList(walletId, { page: 1, limit: 20, status: ['Created'], side: 0 });
+ * const multiStatus = await getOrderList(walletId, { status: [0, 1, 2] }); // Open, Partial, Filled
+ */
+export async function getOrderList(
+  wallet_id: string,
+  params?: {
+    page?: number;
+    limit?: number;
+    status?: (number | string)[];  // ✅ Array of status values
+    side?: number;
+    token?: number;
+    from_date?: string;
+    to_date?: string;
+  }
+): Promise<OrderListResponse> {
+  const endpoint = API_ENDPOINTS.ORDER.LIST.replace(':wallet_id', wallet_id);
+  const response = await apiClient.get(endpoint, { params });
   return response.data;
 }
 
