@@ -1,8 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ZK-Proof Landing Page - Exact Colors from Figma */
+  --background: #1A1D2E;
+  --background-card: #282537;
+  --foreground: #FFFFFF;
+  --text-secondary: #585664;
+  --text-muted: #64748B;
+
+  /* Accent Colors - Exact from Figma */
+  --purple: #8B5CF6;
+  --purple-dark: #42254A;
+  --cyan: #217D87;
+  --cyan-secondary: #357F8C;
+  --blue-dark: #244663;
+
+  /* Glass Effect */
+  --glass-bg: rgba(40, 37, 55, 0.4);
+  --glass-border: rgba(36, 70, 99, 0.3);
 }
 
 @theme inline {
@@ -10,19 +25,29 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* ZK-Proof Custom Colors */
+  --color-purple: #8B5CF6;
+  --color-cyan: #357F8C;
+  --color-blue-dark: #244663;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Background Pattern */
+.pattern-bg {
+  background-color: #1A1D2E;
+  background-image:
+    radial-gradient(circle at 20% 50%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(53, 127, 140, 0.15) 0%, transparent 50%),
+    linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 50px 50px, 50px 50px;
+  background-position: 0 0, 0 0, 0 0, 0 0;
 }
 
 /* Custom Scrollbar Styles - Ultra Thin & Smooth */

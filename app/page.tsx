@@ -1,9 +1,6 @@
-import HeroSection from "@/components/HeroSection";
+import LandingPage from "@/components/landing/LandingPage";
 
 export default function Home() {
-  return (
-    <div className="bg-black">
-      <HeroSection />
-    </div>
-  );
+  // cần thêm ở file này
+  return <LandingPage />;
 }
