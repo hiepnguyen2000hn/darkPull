@@ -45,10 +45,10 @@ const nextConfig: NextConfig = {
       },
     });
 
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@aztec/bb.js': path.resolve(__dirname, 'node_modules/@aztec/bb.js'),
-    };
+    // config.resolve.alias = {
+    //   ...config.resolve.alias,
+    //   '@aztec/bb.js': path.resolve(__dirname, 'node_modules/@aztec/bb.js'),
+    // };
 
     // Fallback for node modules that might not be available in the browser
     if (!isServer) {
