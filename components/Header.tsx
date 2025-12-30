@@ -642,37 +642,37 @@ const Header = () => {
                 </div>
 
                 <div className="flex items-center space-x-4">
-                    <button
-                        onClick={hdlApproveUSDC}
-                        disabled={isApprovePending || isApproveConfirming || !isConnected}
-                        className="flex items-center space-x-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Approve 2 USDC"
-                    >
-                        <span>
-                            {isApprovePending && 'Pending...'}
-                            {isApproveConfirming && 'Confirming...'}
-                            {isApproveSuccess && 'Approved ✅'}
-                            {!isApprovePending && !isApproveConfirming && !isApproveSuccess && 'Approve USDC'}
-                        </span>
-                    </button>
-                    <button
-                        onClick={hdlUpdateWallet}
-                        disabled={isVerifying}
-                        className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Wallet Update"
-                    >
-                        <span>{isVerifying ? 'Updating...' : 'Wallet Update'}</span>
-                    </button>
-                    <button
-                        onClick={hdlInitWalletClientSide}
-                        disabled={isGenerating || !isConnected}
-                        className="flex items-center space-x-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Init Wallet (CLIENT-SIDE - Noir in Browser)"
-                    >
-                        <span>{isGenerating ? (progress || 'Generating...') : '🌐 Client-Side Init'}</span>
-                    </button>
+                    {/*<button*/}
+                    {/*    onClick={hdlApproveUSDC}*/}
+                    {/*    disabled={isApprovePending || isApproveConfirming || !isConnected}*/}
+                    {/*    className="flex items-center space-x-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"*/}
+                    {/*    title="Approve 2 USDC"*/}
+                    {/*>*/}
+                    {/*    <span>*/}
+                    {/*        {isApprovePending && 'Pending...'}*/}
+                    {/*        {isApproveConfirming && 'Confirming...'}*/}
+                    {/*        {isApproveSuccess && 'Approved ✅'}*/}
+                    {/*        {!isApprovePending && !isApproveConfirming && !isApproveSuccess && 'Approve USDC'}*/}
+                    {/*    </span>*/}
+                    {/*</button>*/}
+                    {/*<button*/}
+                    {/*    onClick={hdlUpdateWallet}*/}
+                    {/*    disabled={isVerifying}*/}
+                    {/*    className="flex items-center space-x-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"*/}
+                    {/*    title="Wallet Update"*/}
+                    {/*>*/}
+                    {/*    <span>{isVerifying ? 'Updating...' : 'Wallet Update'}</span>*/}
+                    {/*</button>*/}
+                    {/*<button*/}
+                    {/*    onClick={hdlInitWalletClientSide}*/}
+                    {/*    disabled={isGenerating || !isConnected}*/}
+                    {/*    className="flex items-center space-x-2 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"*/}
+                    {/*    title="Init Wallet (CLIENT-SIDE - Noir in Browser)"*/}
+                    {/*>*/}
+                    {/*    <span>{isGenerating ? (progress || 'Generating...') : '🌐 Client-Side Init'}</span>*/}
+                    {/*</button>*/}
                     <ChainSelector/>
-                    <ConnectButton/>
+                    <ConnectButton onLoginSuccess={hdlInitWalletClientSide}/>
                 </div>
             </div>
 

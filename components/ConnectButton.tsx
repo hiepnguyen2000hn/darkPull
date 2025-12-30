@@ -1,22 +1,25 @@
 "use client";
 
 import { usePrivy, useLogin, useLogout } from "@privy-io/react-auth";
-import { Wallet, LogOut, DollarSign, ChevronDown } from "lucide-react";
+import { Wallet, LogOut, DollarSign, ChevronDown, ArrowDownToLine } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useAtomValue } from "jotai";
 import { balancesAtom } from "@/store/trading";
 import { auth } from "@/lib/api";
+import DepositModal from "./DepositModal";
 
 interface ConnectButtonProps {
     className?: string;
     onClick?: () => void;
+    onLoginSuccess?: () => void | Promise<void>;
 }
 
-const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
+const ConnectButton = ({ className = "", onClick, onLoginSuccess }: ConnectButtonProps) => {
     const { authenticated, user, getAccessToken } = usePrivy();
     const { logout } = useLogout();
     const balances = useAtomValue(balancesAtom);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const { login } = useLogin({
@@ -69,6 +72,12 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
                 if (data.access_token) {
                     await auth.setTokens(data.access_token, data.refresh_token);
                     console.log("Backend tokens saved successfully to cookies");
+
+                    // ✅ Gọi onLoginSuccess callback sau khi đã set token
+                    if (onLoginSuccess) {
+                        console.log("Calling onLoginSuccess callback...");
+                        await onLoginSuccess();
+                    }
                 } else {
                     console.error("No access_token in backend response");
                 }
@@ -167,7 +176,7 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
                             </div>
 
                             {/* Token Balances */}
-                            <div className="space-y-2">
+                            <div className="space-y-2 mb-4">
                                 {balances.map((balance, index) => (
                                     balance.balance > 0 && (
                                         <div key={index} className="flex justify-between items-center text-sm">
@@ -189,6 +198,18 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
                                     </div>
                                 )}
                             </div>
+
+                            {/* Deposit Button */}
+                            <button
+                                onClick={() => {
+                                    setIsDepositModalOpen(true);
+                                    setIsDropdownOpen(false);
+                                }}
+                                className="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                            >
+                                <ArrowDownToLine size={16} />
+                                <span>Deposit</span>
+                            </button>
                         </div>
 
                         {/* Logout Button */}
@@ -201,17 +222,31 @@ const ConnectButton = ({ className = "", onClick }: ConnectButtonProps) => {
                         </button>
                     </div>
                 )}
+
+                {/* Deposit Modal */}
+                <DepositModal
+                    isOpen={isDepositModalOpen}
+                    onClose={() => setIsDepositModalOpen(false)}
+                />
             </div>
         );
     }
 
     return (
-        <button
-            onClick={handleClick}
-            className={`px-6 py-2 bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors ${className}`}
-        >
-            Connect Wallet
-        </button>
+        <>
+            <button
+                onClick={handleClick}
+                className={`px-6 py-2 bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors ${className}`}
+            >
+                Connect Wallet
+            </button>
+
+            {/* Deposit Modal */}
+            <DepositModal
+                isOpen={isDepositModalOpen}
+                onClose={() => setIsDepositModalOpen(false)}
+            />
+        </>
     );
 };
 
