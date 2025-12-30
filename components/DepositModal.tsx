@@ -4,14 +4,19 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import Stepper, { Step } from './Stepper';
 import { useUSDC } from '@/hooks/useUSDC';
-import { DARKPOOL_CORE_ADDRESS } from '@/lib/constants';
-
-interface Token {
-    symbol: string;
-    name: string;
-    icon: string;
-    balance: string;
-}
+import { DARKPOOL_CORE_ADDRESS, MOCK_USDC_ADDRESS, PERMIT2_ADDRESS } from '@/lib/constants';
+import { TokenIconBySymbol } from './TokenSelector';
+import { useTokens } from '@/hooks/useTokens';
+import { type Token, getUserProfile } from '@/lib/services';
+import { usePrivy } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth';
+import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
+import { usePermit2Signature } from '@/hooks/usePermit2Signature';
+import { type TransferAction, type WalletState } from '@/hooks/useProof';
+import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { signMessageWithSkRoot } from '@/lib/ethers-signer';
+import { parseUnits } from 'viem';
+import toast from 'react-hot-toast';
 
 interface DepositModalProps {
     isOpen: boolean;
@@ -33,6 +38,20 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
     const [amount, setAmount] = useState('');
     const [currentStep, setCurrentStep] = useState(1);
     const [errorMessage, setErrorMessage] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false); // ✅ Loading state
+    const [processingStep, setProcessingStep] = useState(''); // ✅ Current processing step
+
+    // Fetch tokens from API with cache
+    const { tokens, isLoading: isLoadingTokens } = useTokens();
+
+    // Privy hooks
+    const { user } = usePrivy();
+    const { wallets } = useWallets();
+
+    // Proof hooks
+    const { verifyProof, calculateNewState } = useProof();
+    const { generateWalletUpdateProofClient } = useWalletUpdateProof();
+    const { signPermit2FE } = usePermit2Signature();
 
     // USDC hook for balance and approve
     const {
@@ -45,8 +64,9 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
         allowance,
         refetchAllowance,
         isLoadingBalance
-    } = useUSDC(DARKPOOL_CORE_ADDRESS);
+    } = useUSDC(PERMIT2_ADDRESS);
 
+    // ✅ Don't render if modal is closed
     if (!isOpen) return null;
 
     const handleClose = () => {
@@ -59,19 +79,40 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
 
     const handleComplete = async () => {
         try {
+            // ✅ Set processing state (will show loading overlay)
+            setIsProcessing(true);
+            setProcessingStep('Initializing...');
+
             console.log('💰 Starting deposit process...', { selectedToken, selectedNetwork, amount });
 
             if (!isConnected) {
-                alert('Please connect wallet first!');
+                toast.error('Please connect wallet first!');
+                setIsProcessing(false);
                 return;
             }
 
             if (!selectedToken || !amount) {
-                alert('Missing required fields');
+                toast.error('Missing required fields');
+                setIsProcessing(false);
                 return;
             }
 
-            // Only approve USDC for now
+            // Get wallet address
+            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            if (!walletAddress) {
+                toast.error('Please connect wallet first!');
+                setIsProcessing(false);
+                return;
+            }
+
+            // Get Privy user ID
+            if (!user?.id) {
+                toast.error('Please authenticate with Privy first!');
+                setIsProcessing(false);
+                return;
+            }
+
+            // Only process USDC for now
             if (selectedToken.symbol === 'USDC') {
                 console.log('💰 Current USDC Balance:', usdcBalance);
                 console.log('📊 Current allowance:', allowance);
@@ -79,31 +120,148 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                 const requiredAmount = parseFloat(amount);
                 const currentAllowance = parseFloat(allowance);
 
-                // Check if allowance is already sufficient
-                if (currentAllowance >= requiredAmount) {
+                // Step 1: Check and approve if needed
+                if (currentAllowance < requiredAmount) {
+                    console.log(`⚠️ Allowance insufficient! Current: ${currentAllowance} USDC, Required: ${requiredAmount} USDC`);
+                    console.log('🔐 Step 1: Approving USDC to spender:', PERMIT2_ADDRESS);
+
+                    setProcessingStep('Approving USDC...');
+                    await approve(PERMIT2_ADDRESS, amount);
+
+                    console.log('✅ Approval transaction confirmed!');
+                } else {
                     console.log(`✅ Allowance already sufficient! Current: ${currentAllowance} USDC, Required: ${requiredAmount} USDC`);
-                    alert(`Deposit approved!\nAmount: ${amount} USDC\nAllowance already sufficient.`);
-                    handleClose();
-                    return;
                 }
 
-                // Need to approve
-                console.log(`⚠️ Allowance insufficient! Current: ${currentAllowance} USDC, Required: ${requiredAmount} USDC`);
-                console.log('🔐 Approving USDC to spender:', DARKPOOL_CORE_ADDRESS);
+                // Step 2: Get user profile and old state
+                setProcessingStep('Fetching user profile...');
+                console.log('📊 Step 2: Fetching user profile...');
+                const walletId = extractPrivyWalletId(user.id);
+                console.log('  - Wallet ID (without prefix):', walletId);
 
-                await approve(DARKPOOL_CORE_ADDRESS, amount);
+                const profile = await getUserProfile(walletId);
+                console.log('✅ Profile loaded:', profile);
 
-                console.log('✅ Approval transaction submitted!');
-                alert(`USDC Approval submitted!\nAmount: ${amount} USDC\nPlease wait for confirmation...`);
+                const oldState: WalletState = {
+                    available_balances: profile.available_balances || Array(10).fill('0'),
+                    reserved_balances: profile.reserved_balances || Array(10).fill('0'),
+                    orders_list: profile.orders_list || Array(4).fill(null),
+                    fees: profile.fees?.toString() || '0',
+                    blinder: profile.blinder,
+                };
+
+                // Step 3: Sign Permit2
+                setProcessingStep('Signing Permit2...');
+                console.log('🔍 Step 3: Signing Permit2...');
+                const permit2Data = await signPermit2FE({
+                    token: MOCK_USDC_ADDRESS,
+                    amount: parseUnits(amount, 6), // ✅ Convert to USDC decimals (6) using viem
+                    spender: DARKPOOL_CORE_ADDRESS,
+                });
+                console.log('✅ Permit2 signed:', {
+                    nonce: permit2Data.permit2Nonce.toString(),
+                    deadline: permit2Data.permit2Deadline.toString(),
+                    signature: permit2Data.permit2Signature.substring(0, 20) + '...'
+                });
+
+                // Step 4: Create TransferAction
+                const action: TransferAction = {
+                    type: 'transfer',
+                    direction: 0,
+                    token_index: 0,
+                    amount: amount,
+                    permit2Nonce: permit2Data.permit2Nonce.toString(),
+                    permit2Deadline: permit2Data.permit2Deadline.toString(),
+                    permit2Signature: permit2Data.permit2Signature
+                };
+
+                // Step 5: Calculate new state
+                setProcessingStep('Calculating new state...');
+                console.log('🔐 Step 5: Calculating new state...');
+                const { newState, operations } = await calculateNewState(
+                    oldState,
+                    action,
+                    profile.nonce || 0
+                );
+
+                console.log('✅ New state calculated:');
+                console.log(`  - Available Balances: [${newState.available_balances.slice(0, 3).join(', ')}...]`);
+                console.log(`  - New Blinder: ${newState.blinder?.substring(0, 20)}...`);
+                console.log('  - Operations:', operations);
+
+                // Step 6: Generate proof
+                setProcessingStep('Generating proof (this may take a moment)...');
+                console.log('🔐 Step 6: Generating wallet update proof...');
+                const userSecret = '12312';
+
+                const proofData = await generateWalletUpdateProofClient({
+                    userSecret,
+                    oldNonce: profile.nonce?.toString() || '0',
+                    oldMerkleRoot: profile.merkle_root,
+                    oldMerkleIndex: profile.merkle_index,
+                    oldHashPath: profile.sibling_paths,
+                    oldState,
+                    newState,
+                    operations
+                });
+
+                console.log('✅ Proof generated successfully:', proofData);
+
+                // Step 7: Sign newCommitment
+                setProcessingStep('Signing commitment...');
+                console.log('🔍 Step 7: Signing newCommitment...');
+                const newCommitment = proofData.publicInputs.new_wallet_commitment;
+                const rootSignature = await signMessageWithSkRoot(newCommitment);
+                console.log('✅ Signature created!');
+
+                // Step 8: Verify proof
+                setProcessingStep('Verifying proof...');
+                console.log('🔍 Step 8: Verifying proof...');
+                const verifyResult = await verifyProof({
+                    proof: proofData.proof,
+                    publicInputs: proofData.publicInputs,
+                    wallet_address: walletAddress,
+                    operations,
+                    signature: rootSignature
+                });
+
+                if (verifyResult.success) {
+                    console.log('✅ Deposit completed successfully!', verifyResult);
+                    setProcessingStep('Deposit completed!');
+                    if (verifyResult.verified) {
+                        toast.success(`Deposit verified successfully!\nAmount: ${amount} USDC`, {
+                            duration: 5000,
+                        });
+                    } else {
+                        toast.error('Deposit verification failed');
+                    }
+                } else {
+                    console.error('❌ Verification failed:', verifyResult.error);
+                    toast.error(`Verification failed: ${verifyResult.error}`);
+                    // ✅ Verification failed → ẩn loading, giữ modal
+                    setIsProcessing(false);
+                    setProcessingStep('');
+                    return;
+                }
             } else {
-                console.log('ℹ️ Token not USDC, skipping approve for now');
-                alert(`Deposit initiated for ${amount} ${selectedToken.symbol}`);
+                console.log('ℹ️ Token not USDC, skipping for now');
+                toast.error(`Deposit not available for ${selectedToken.symbol} yet`);
+                // ✅ Token not supported → ẩn loading, giữ modal
+                setIsProcessing(false);
+                setProcessingStep('');
+                return;
             }
 
-            handleClose();
+            // ✅ Success → Reset all state and close modal completely
+            setIsProcessing(false);
+            setProcessingStep('');
+            handleClose(); // ✅ Close modal and reset state
         } catch (error) {
             console.error('❌ Error in deposit process:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(error instanceof Error ? error.message : 'Unknown error occurred');
+            // ✅ Error → Ẩn loading overlay, giữ modal để user thử lại
+            setIsProcessing(false);
+            setProcessingStep('');
         }
     };
 
@@ -157,33 +315,32 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
 
     const validation = getValidationForCurrentStep();
 
-    // Build tokens list with real balance
-    const TOKENS: Token[] = [
-        { symbol: 'BTC', name: 'Bitcoin', icon: '₿', balance: '0.00' },
-        { symbol: 'ETH', name: 'Ethereum', icon: 'Ξ', balance: '0.00' },
-        { symbol: 'USDC', name: 'USD Coin', icon: '$', balance: usdcBalance },
-        { symbol: 'USDT', name: 'Tether', icon: '₮', balance: '0.00' },
-        { symbol: 'XRP', name: 'Ripple', icon: 'X', balance: '0.00' },
-        { symbol: 'ZEC', name: 'Zcash', icon: 'Z', balance: '0.00' },
-        { symbol: 'BNB', name: 'Binance Coin', icon: 'B', balance: '0.00' },
-        { symbol: 'SOL', name: 'Solana', icon: 'S', balance: '0.00' },
-        { symbol: 'ADA', name: 'Cardano', icon: 'A', balance: '0.00' },
-        { symbol: 'DOGE', name: 'Dogecoin', icon: 'D', balance: '0.00' },
-    ];
-
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="relative w-full max-w-xl mx-4 bg-gradient-to-b from-gray-900 to-gray-900/95 border border-gray-700/70 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300">
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/50">
-                    <h2 className="text-xl font-bold text-white">Deposit Assets</h2>
-                    <button
-                        onClick={handleClose}
-                        className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
+        <>
+            {/* ✅ Fullscreen Loading Overlay - shows when processing */}
+            {isProcessing && (
+                <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
+                    <div className="w-20 h-20 border-4 border-teal-500/30 border-t-teal-500 rounded-full animate-spin"></div>
+                    <div className="text-white font-medium text-xl mt-6">{processingStep}</div>
+                    <div className="text-gray-400 text-sm mt-2">Please wait, do not close this window...</div>
                 </div>
+            )}
+
+            {/* ✅ Modal Content - hidden when processing */}
+            {!isProcessing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="relative w-full max-w-xl mx-4 bg-gradient-to-b from-gray-900 to-gray-900/95 border border-gray-700/70 rounded-2xl shadow-2xl animate-in zoom-in-95 duration-300">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/50">
+                        <h2 className="text-xl font-bold text-white">Deposit Assets</h2>
+                        <button
+                            onClick={handleClose}
+                            disabled={isProcessing}
+                            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
 
                 {/* Stepper */}
                 <div className="px-5 py-4">
@@ -204,26 +361,12 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                         <Step>
                             <div className="space-y-4">
                                 <h3 className="text-base font-semibold text-white/90 mt-1">Choose a token to deposit</h3>
-                                <div className="max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-teal-500/50 scrollbar-track-gray-800/50 hover:scrollbar-thumb-teal-500/70 scroll-smooth">
-                                    <div className="grid gap-2.5">
-                                        {TOKENS.map((token) => {
-                                            const getTokenColor = (symbol: string) => {
-                                                const colors: Record<string, string> = {
-                                                    'BTC': 'bg-gradient-to-br from-orange-500/30 to-orange-600/30 text-orange-400',
-                                                    'ETH': 'bg-gradient-to-br from-blue-500/30 to-blue-600/30 text-blue-400',
-                                                    'USDC': 'bg-gradient-to-br from-blue-600/30 to-blue-700/30 text-blue-300',
-                                                    'USDT': 'bg-gradient-to-br from-green-500/30 to-green-600/30 text-green-400',
-                                                    'XRP': 'bg-gradient-to-br from-gray-500/30 to-gray-600/30 text-gray-300',
-                                                    'ZEC': 'bg-gradient-to-br from-yellow-500/30 to-yellow-600/30 text-yellow-400',
-                                                    'BNB': 'bg-gradient-to-br from-yellow-400/30 to-yellow-500/30 text-yellow-300',
-                                                    'SOL': 'bg-gradient-to-br from-purple-500/30 to-purple-600/30 text-purple-400',
-                                                    'ADA': 'bg-gradient-to-br from-blue-400/30 to-blue-500/30 text-blue-300',
-                                                    'DOGE': 'bg-gradient-to-br from-yellow-600/30 to-yellow-700/30 text-yellow-500',
-                                                };
-                                                return colors[symbol] || 'bg-gradient-to-br from-gray-500/30 to-gray-600/30 text-gray-400';
-                                            };
-
-                                            return (
+                                {isLoadingTokens ? (
+                                    <div className="text-center py-10 text-gray-400">Loading tokens...</div>
+                                ) : (
+                                    <div className="max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-teal-500/50 scrollbar-track-gray-800/50 hover:scrollbar-thumb-teal-500/70 scroll-smooth">
+                                        <div className="grid gap-2.5">
+                                            {tokens.map((token) => (
                                                 <button
                                                     key={token.symbol}
                                                     onClick={() => setSelectedToken(token)}
@@ -234,8 +377,8 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                                                     }`}
                                                 >
                                                     <div className="flex items-center space-x-3">
-                                                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-xl font-bold transition-transform group-hover:scale-110 ${getTokenColor(token.symbol)}`}>
-                                                            {token.icon}
+                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center transition-transform group-hover:scale-110">
+                                                            <TokenIconBySymbol symbol={token.symbol} size="md" />
                                                         </div>
                                                         <div className="text-left">
                                                             <div className="text-white font-semibold text-sm">{token.symbol}</div>
@@ -244,13 +387,15 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                                                     </div>
                                                     <div className="text-right">
                                                         <div className="text-gray-500 text-xs mb-0.5">Balance</div>
-                                                        <div className="text-white/90 font-medium text-xs">{token.balance}</div>
+                                                        <div className="text-white/90 font-medium text-xs">
+                                                            {token.symbol === 'USDC' ? usdcBalance : '0.00'}
+                                                        </div>
                                                     </div>
                                                 </button>
-                                            );
-                                        })}
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </Step>
 
@@ -262,19 +407,8 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
 
                                 {/* Selected Token Display */}
                                 <div className="p-3 bg-gradient-to-r from-teal-500/5 to-blue-500/5 border border-teal-500/30 rounded-lg flex items-center space-x-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${
-                                        selectedToken.symbol === 'BTC' ? 'bg-gradient-to-br from-orange-500/30 to-orange-600/30 text-orange-400' :
-                                        selectedToken.symbol === 'ETH' ? 'bg-gradient-to-br from-blue-500/30 to-blue-600/30 text-blue-400' :
-                                        selectedToken.symbol === 'USDC' ? 'bg-gradient-to-br from-blue-600/30 to-blue-700/30 text-blue-300' :
-                                        selectedToken.symbol === 'USDT' ? 'bg-gradient-to-br from-green-500/30 to-green-600/30 text-green-400' :
-                                        selectedToken.symbol === 'XRP' ? 'bg-gradient-to-br from-gray-500/30 to-gray-600/30 text-gray-300' :
-                                        selectedToken.symbol === 'ZEC' ? 'bg-gradient-to-br from-yellow-500/30 to-yellow-600/30 text-yellow-400' :
-                                        selectedToken.symbol === 'BNB' ? 'bg-gradient-to-br from-yellow-400/30 to-yellow-500/30 text-yellow-300' :
-                                        selectedToken.symbol === 'SOL' ? 'bg-gradient-to-br from-purple-500/30 to-purple-600/30 text-purple-400' :
-                                        selectedToken.symbol === 'ADA' ? 'bg-gradient-to-br from-blue-400/30 to-blue-500/30 text-blue-300' :
-                                        'bg-gradient-to-br from-yellow-600/30 to-yellow-700/30 text-yellow-500'
-                                    }`}>
-                                        {selectedToken.icon}
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center">
+                                        <TokenIconBySymbol symbol={selectedToken.symbol} size="md" />
                                     </div>
                                     <div>
                                         <div className="text-white font-semibold text-sm">{selectedToken.symbol}</div>
@@ -318,7 +452,9 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                                         </div>
                                     </div>
                                     <div className="mt-2 text-xs text-gray-500">
-                                        Available: <span className="text-gray-400 font-medium">{selectedToken.balance} {selectedToken.symbol}</span>
+                                        Available: <span className="text-gray-400 font-medium">
+                                            {selectedToken.symbol === 'USDC' ? usdcBalance : '0.00'} {selectedToken.symbol}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -339,13 +475,8 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                                     <div className="flex items-center justify-between py-3 border-b border-gray-700/50">
                                         <span className="text-gray-400 text-sm">Token</span>
                                         <div className="flex items-center space-x-2">
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold ${
-                                                selectedToken.symbol === 'BTC' ? 'bg-gradient-to-br from-orange-500/30 to-orange-600/30 text-orange-400' :
-                                                selectedToken.symbol === 'ETH' ? 'bg-gradient-to-br from-blue-500/30 to-blue-600/30 text-blue-400' :
-                                                selectedToken.symbol === 'USDC' ? 'bg-gradient-to-br from-blue-600/30 to-blue-700/30 text-blue-300' :
-                                                'bg-gradient-to-br from-green-500/30 to-green-600/30 text-green-400'
-                                            }`}>
-                                                {selectedToken.icon}
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                                                <TokenIconBySymbol symbol={selectedToken.symbol} size="sm" />
                                             </div>
                                             <span className="text-white font-semibold">{selectedToken.symbol}</span>
                                         </div>
@@ -382,6 +513,8 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                 </div>
             </div>
         </div>
+            )}
+        </>
     );
 };
 

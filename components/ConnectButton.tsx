@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { useAtomValue } from "jotai";
 import { balancesAtom } from "@/store/trading";
 import { auth } from "@/lib/api";
-import DepositModal from "./DepositModal";
+import DepositModal from "./depositModal";
 
 interface ConnectButtonProps {
     className?: string;
@@ -73,10 +73,20 @@ const ConnectButton = ({ className = "", onClick, onLoginSuccess }: ConnectButto
                     await auth.setTokens(data.access_token, data.refresh_token);
                     console.log("Backend tokens saved successfully to cookies");
 
-                    // ✅ Gọi onLoginSuccess callback sau khi đã set token
-                    if (onLoginSuccess) {
-                        console.log("Calling onLoginSuccess callback...");
-                        await onLoginSuccess();
+                    // ✅ Kiểm tra wallet_address trước khi gọi onLoginSuccess
+                    // Chỉ gọi hdlInitWalletClientSide nếu user chưa có wallet_address
+                    const hasWalletAddress = data.user?.wallet_address;
+
+                    if (hasWalletAddress) {
+                        console.log("✅ User already has wallet_address:", data.user.wallet_address);
+                        console.log("⏭️ Skipping wallet initialization (already initialized)");
+                    } else {
+                        console.log("⚠️ User does not have wallet_address yet");
+                        console.log("🚀 Calling onLoginSuccess to initialize wallet...");
+
+                        if (onLoginSuccess) {
+                            await onLoginSuccess();
+                        }
                     }
                 } else {
                     console.error("No access_token in backend response");

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useWallets } from '@privy-io/react-auth';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig } from 'wagmi';
+import { waitForTransactionReceipt } from 'wagmi/actions';
 import { parseUnits, formatUnits } from 'viem';
 import { MOCK_USDC_ADDRESS } from '@/lib/constants';
 
@@ -43,6 +44,7 @@ const ERC20_ABI = [
 
 export function useUSDC(spenderAddress?: `0x${string}`) {
   const { wallets } = useWallets();
+  const config = useConfig(); // ✅ Get wagmi config for waitForTransactionReceipt
   const [userAddress, setUserAddress] = useState<`0x${string}` | undefined>();
 
   // Get embedded wallet address
@@ -98,7 +100,7 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
 
   // Approve USDC
   const {
-    writeContract: approveWrite,
+    writeContractAsync: approveWriteAsync,
     data: approveTxHash,
     isPending: isApprovePending,
     error: approveError,
@@ -112,7 +114,7 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
     hash: approveTxHash,
   });
 
-  // Approve function
+  // Approve function - ✅ Now waits for transaction confirmation
   const approve = async (spender: `0x${string}`, amount: string) => {
     if (!userAddress) {
       throw new Error('Wallet not connected');
@@ -121,21 +123,34 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
     try {
       const amountInWei = parseUnits(amount, USDC_DECIMALS);
 
-      approveWrite({
+      console.log('🔐 Sending approve transaction...', amountInWei);
+      // ✅ Use writeContractAsync to get transaction hash
+      const txHash = await approveWriteAsync({
         address: USDC_ADDRESS as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [spender, amountInWei],
       });
 
-      return approveTxHash;
+      console.log('⏳ Waiting for transaction confirmation...', txHash);
+      // ✅ Wait for transaction to be mined
+      const receipt = await waitForTransactionReceipt(config, {
+        hash: txHash,
+      });
+
+      console.log('✅ Transaction confirmed!', receipt);
+
+      // ✅ Refetch allowance after successful approval
+      await refetchAllowance();
+
+      return txHash;
     } catch (error) {
       console.error('Error approving USDC:', error);
       throw error;
     }
   };
 
-  // Approve max amount (useful for DEX interactions)
+  // Approve max amount (useful for DEX interactions) - ✅ Now waits for confirmation
   const approveMax = async (spender: `0x${string}`) => {
     if (!userAddress) {
       throw new Error('Wallet not connected');
@@ -144,14 +159,27 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
     try {
       const maxAmount = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
-      approveWrite({
+      console.log('🔐 Sending approve max transaction...', maxAmount);
+      // ✅ Use writeContractAsync to get transaction hash
+      const txHash = await approveWriteAsync({
         address: USDC_ADDRESS as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'approve',
         args: [spender, maxAmount],
       });
 
-      return approveTxHash;
+      console.log('⏳ Waiting for transaction confirmation...', txHash);
+      // ✅ Wait for transaction to be mined
+      const receipt = await waitForTransactionReceipt(config, {
+        hash: txHash,
+      });
+
+      console.log('✅ Transaction confirmed!', receipt);
+
+      // ✅ Refetch allowance after successful approval
+      await refetchAllowance();
+
+      return txHash;
     } catch (error) {
       console.error('Error approving max USDC:', error);
       throw error;

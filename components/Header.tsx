@@ -20,6 +20,7 @@ import {useClientProof} from '@/hooks/useClientProof';
 import {useGenerateWalletInit} from '@/hooks/useGenerateWalletInit';
 import {saveAllKeys, signMessageWithSkRoot} from '@/lib/ethers-signer';
 import {extractPrivyWalletId} from '@/lib/wallet-utils';
+import toast from 'react-hot-toast';
 
 const Header = () => {
     const [isProofModalOpen, setIsProofModalOpen] = useState(false);
@@ -29,7 +30,7 @@ const Header = () => {
     const {wallets} = useWallets();
     const {signMessage} = useSignMessage();
     const {signTypedDataAsync} = useSignTypedData();
-    const {verifyProof, isVerifying, error, calculateNewState} = useProof();
+    const {verifyProof, isVerifying, error, calculateNewState, cancelOrder} = useProof();
     const {importWallet} = useImportWallet();
     const {deriveKeysFromSignature, generateInitProofClient, isGenerating, progress} = useClientProof();
     const {generateWalletInit} = useGenerateWalletInit();
@@ -65,7 +66,7 @@ const Header = () => {
             // exportWallet(); // For debugging purposes
             // return
             if (!isConnected) {
-                alert('Please connect wallet first!');
+                toast.error('Please connect wallet first!');
                 return;
             }
             console.log('pass')
@@ -81,11 +82,11 @@ const Header = () => {
             const currentAllowance = parseFloat(allowance);
             const requiredAmount = parseFloat(AMOUNT);
 
-            if (currentAllowance >= requiredAmount) {
-                console.log(`✅ Allowance already sufficient! Current: ${currentAllowance} USDC, Required: ${requiredAmount} USDC`);
-                alert(`Allowance already sufficient!\nCurrent: ${currentAllowance} USDC\nRequired: ${requiredAmount} USDC\n\nNo need to approve again.`);
-                return;
-            }
+            // if (currentAllowance >= requiredAmount) {
+            //     console.log(`✅ Allowance already sufficient! Current: ${currentAllowance} USDC, Required: ${requiredAmount} USDC`);
+            //     alert(`Allowance already sufficient!\nCurrent: ${currentAllowance} USDC\nRequired: ${requiredAmount} USDC\n\nNo need to approve again.`);
+            //     return;
+            // }
 
             // Step 3: Need to approve
             console.log(`⚠️ Allowance insufficient! Current: ${currentAllowance} USDC, Required: ${requiredAmount} USDC`);
@@ -96,7 +97,7 @@ const Header = () => {
             console.log('✅ Approval transaction submitted!');
         } catch (error) {
             console.error('❌ Error approving USDC:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(error instanceof Error ? error.message : 'Unknown error');
         }
     };
 
@@ -144,15 +145,17 @@ const Header = () => {
 
             if (verifyResult.success) {
                 console.log('✅ Step 5: Proof verified successfully!', verifyResult);
-                alert(`Proof verified: ${verifyResult.verified ? 'SUCCESS ✅' : 'FAILED ❌'}`);
+                verifyResult.verified
+                    ? toast.success('Proof verified successfully!')
+                    : toast.error('Proof verification failed');
             } else {
                 console.error('❌ Step 5: Verification failed:', verifyResult.error);
-                alert(`Verification failed: ${verifyResult.error}`);
+                toast.error(`Verification failed: ${verifyResult.error}`);
             }
 
         } catch (error) {
             console.error('❌ Error in proof process:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(error instanceof Error ? error.message : 'Unknown error');
         }
     }
 
@@ -163,13 +166,13 @@ const Header = () => {
             // Get wallet address
             const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
             if (!walletAddress) {
-                alert('Please connect wallet first!');
+                toast.error('Please connect wallet first!');
                 return;
             }
 
             // Get Privy user ID
             if (!user?.id) {
-                alert('Please authenticate with Privy first!');
+                toast.error('Please authenticate with Privy first!');
                 return;
             }
 
@@ -222,23 +225,12 @@ const Header = () => {
             //     permit2Signature: permit2Data.permit2Signature
             // };
 
-            // const action: OrderAction = {
-            //     type: 'order',
-            //     operation_type: 0,
-            //     order_index: 1,
-            //     order_data: {
-            //         price: '1',
-            //         qty: '100',
-            //         side: 1,
-            //         token_in: 1,
-            //         token_out: 0
-            //     }
-            // };
+
 
             // const action: OrderAction = {
             //     type: 'order',
             //     operation_type: 1,
-            //     order_index: 3,
+            //     order_index: 0,
             // };
 
 
@@ -287,30 +279,41 @@ const Header = () => {
             console.log('  - Root signature:', rootSignature.substring(0, 30) + '...');
 
             console.log('🔍 Step 6: Verifying proof with auto-generated operations...');
-            const verifyResult = await verifyProof({
-                proof: proofData.proof,
-                publicInputs: proofData.publicInputs,
-                wallet_address: walletAddress,
-                operations,
-                signature: rootSignature
-            });
+            // const verifyResult = await verifyProof({
+            //     proof: proofData.proof,
+            //     publicInputs: proofData.publicInputs,
+            //     wallet_address: walletAddress,
+            //     operations,
+            //     signature: rootSignature
+            // });
+
+            // const verifyResult = await cancelOrder({
+            //     proof: proofData.proof,
+            //     publicInputs: proofData.publicInputs,
+            //     wallet_address: walletAddress,
+            //     operations,
+            //     signature: rootSignature
+            // });
 
             if (verifyResult.success) {
                 console.log('✅ Step 7: Wallet update verified successfully!', verifyResult);
-                alert(`Wallet Update verified: ${verifyResult.verified ? 'SUCCESS ✅' : 'FAILED ❌'}`);
+                verifyResult.verified
+                    ? toast.success('Wallet update verified successfully!')
+                    : toast.error('Wallet update verification failed');
             } else {
                 console.error('❌ Step 7: Verification failed:', verifyResult.error);
-                alert(`Verification failed: ${verifyResult.error}`);
+                toast.error(`Verification failed: ${verifyResult.error}`);
             }
 
         } catch (error) {
             console.error('❌ Error in wallet update process:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(error instanceof Error ? error.message : 'Unknown error');
         }
     };
 
     // ✅ CLIENT-SIDE PROOF GENERATION (using Noir in browser)
     const hdlInitWalletClientSide = async () => {
+
         try {
             console.log('🚀🌐 Step 1: CLIENT-SIDE Wallet Init (Noir in Browser)...');
             // exportWallet(); //
@@ -318,7 +321,7 @@ const Header = () => {
             // Get wallet address
             const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
             if (!walletAddress) {
-                alert('Please connect wallet first!');
+                toast.error('Please connect wallet first!');
                 return;
             }
 
@@ -335,7 +338,7 @@ const Header = () => {
                 },
                 primaryType: 'Auth',
                 message: {
-                    message: "Renegade Authentication ver3"
+                    message: "Renegade Authentication"
                 }
             });
 
@@ -451,21 +454,14 @@ const Header = () => {
             console.log('✅ Step 7: Wallet initialization completed (CLIENT-SIDE)!');
             console.log('Final result:', finalResult);
 
-            alert(
-                `🌐 CLIENT-SIDE Wallet Init Success! ✅\n\n` +
-                `Address: ${walletAddress}\n` +
-                `Proof: ${proofResult.proof?.substring(0, 30)}...\n` +
-                `Signature: ${commitmentSignature.substring(0, 30)}...\n` +
-                `Verified: ${proofResult.verified}\n` +
-                `Total time: ${proofResult.timing?.total}ms\n\n` +
-                `✨ Proof generated in BROWSER!\n` +
-                `✨ Private key NEVER left wallet!\n\n` +
-                `Check console for full details!`
+            toast.success(
+                `Wallet initialized successfully!\nProof generated in ${proofResult.timing?.total}ms`,
+                { duration: 5000 }
             );
 
         } catch (error) {
             console.error('❌ Error in CLIENT-SIDE wallet init:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(error instanceof Error ? error.message : 'Unknown error');
         }
     };
 
@@ -477,7 +473,7 @@ const Header = () => {
             // Get wallet address
             const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
             if (!walletAddress) {
-                alert('Please connect wallet first!');
+                toast.error('Please connect wallet first!');
                 return;
             }
             // exportWallet(); //
@@ -603,17 +599,11 @@ const Header = () => {
             console.log('✅ Step 6: Wallet initialization completed!');
             console.log('Final result:', finalResult);
 
-            alert(
-                `Wallet V2 Initialized Successfully! ✅\n\n` +
-                `Address: ${walletAddress}\n` +
-                `Proof: ${proofData.proof.substring(0, 30)}...\n` +
-                `Signature: ${signatureData.signature.substring(0, 30)}...\n\n` +
-                `Check console for full payload!`
-            );
+            toast.success('Wallet V2 initialized successfully!', { duration: 5000 });
 
         } catch (error) {
             console.error('❌ Error in V2 wallet initialization:', error);
-            alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(error instanceof Error ? error.message : 'Unknown error');
         }
     };
 

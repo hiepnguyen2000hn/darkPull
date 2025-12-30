@@ -29,7 +29,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
     const toggleSide = useSetAtom(toggleOrderSideAtom);
     const updateAmount = useSetAtom(updateOrderAmountAtom);
     const updatePrice = useSetAtom(updateLimitPriceAtom);
-    const [selectedToken, setSelectedToken] = useState('BTC');
+    const [selectedToken, setSelectedToken] = useState('USDC');
     const { verifyProof, submitOrder, calculateNewState } = useProof();
     const { generateWalletUpdateProofClient } = useWalletUpdateProof();
     const { profile, fetchProfile } = useUserProfile();
@@ -100,6 +100,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
             const tokenIn = orderInput.side === 'buy' ? baseTokenIndex : quoteTokenIndex;
             const tokenOut = orderInput.side === 'buy' ? quoteTokenIndex : baseTokenIndex;
 
+            console.log(tokenIn, tokenOut, 'check------------');
             // ✅ Get price from input or default to '1'
             const orderPrice = orderInput.limitPrice || '1';
 

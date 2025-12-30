@@ -14,8 +14,8 @@ export interface TradingPair {
 // Current selected pair
 export const tradingPairAtom = atom<TradingPair>({
   base: 'BTC',
-  quote: 'USDT',
-  symbol: 'btc-usdt',
+  quote: 'USDC',
+  symbol: 'btc-usdc',
 });
 
 // ============================================

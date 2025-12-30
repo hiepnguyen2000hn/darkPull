@@ -1,12 +1,17 @@
 'use client';
 
-import { Filter, Circle } from 'lucide-react';
+import { Filter, Circle, X } from 'lucide-react';
 import { usePrivy } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth';
 import { TokenIconBySymbol } from './TokenSelector';
 import { useTokenMapping } from '@/hooks/useTokenMapping';
 import { useState, useEffect } from 'react';
-import { getOrderList, type Order } from '@/lib/services';
+import { getOrderList, getUserProfile, type Order } from '@/lib/services';
 import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
+import { type OrderAction, type WalletState } from '@/hooks/useProof';
+import { signMessageWithSkRoot } from '@/lib/ethers-signer';
+import toast from 'react-hot-toast';
 
 // Order status mapping
 const ORDER_STATUS = {
@@ -31,10 +36,16 @@ interface OrderFilters {
 
 const OrderPanel = () => {
     const { authenticated, user } = usePrivy();
+    const { wallets } = useWallets();
     const { getSymbol } = useTokenMapping();
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [cancellingOrderIndex, setCancellingOrderIndex] = useState<number | null>(null); // ✅ Track which order is being cancelled
+
+    // Proof hooks
+    const { calculateNewState, cancelOrder } = useProof();
+    const { generateWalletUpdateProofClient } = useWalletUpdateProof();
 
     // ✅ Filter state với default status=["Created"], limit=4
     const [filters, setFiltersState] = useState<OrderFilters>({
@@ -60,6 +71,117 @@ const OrderPanel = () => {
             ...newFilters,
             page: newFilters.page ?? 1, // Reset to page 1 when filters change (unless explicitly set)
         }));
+    };
+
+    // Handle cancel order
+    const handleCancelOrder = async (orderIndex: number) => {
+        try {
+            setCancellingOrderIndex(orderIndex);
+            console.log('🚫 Starting cancel order process...', { orderIndex });
+
+            // Get wallet address
+            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            if (!walletAddress) {
+                toast.error('Please connect wallet first!');
+                setCancellingOrderIndex(null);
+                return;
+            }
+
+            // Get Privy user ID
+            if (!user?.id) {
+                toast.error('Please authenticate with Privy first!');
+                setCancellingOrderIndex(null);
+                return;
+            }
+
+            // Step 1: Get user profile and old state
+            console.log('📊 Step 1: Fetching user profile...');
+            const walletId = extractPrivyWalletId(user.id);
+            const profile = await getUserProfile(walletId);
+            console.log('✅ Profile loaded:', profile);
+
+            const oldState: WalletState = {
+                available_balances: profile.available_balances || Array(10).fill('0'),
+                reserved_balances: profile.reserved_balances || Array(10).fill('0'),
+                orders_list: profile.orders_list || Array(4).fill(null),
+                fees: profile.fees?.toString() || '0',
+                blinder: profile.blinder,
+            };
+
+            // Step 2: Create OrderAction for cancel
+            console.log('🔐 Step 2: Creating cancel order action...');
+            const action: OrderAction = {
+                type: 'order',
+                operation_type: 1,  // ✅ 1 = CANCEL
+                order_index: orderIndex,  // ✅ Index of order to cancel
+            };
+
+            // Step 3: Calculate new state
+            console.log('🔐 Step 3: Calculating new state...');
+            const { newState, operations } = await calculateNewState(
+                oldState,
+                action,
+                profile.nonce || 0
+            );
+
+            console.log('✅ New state calculated:');
+            console.log(`  - Orders: ${newState.orders_list.filter((o) => o !== null).length} active orders`);
+            console.log('  - Operations:', operations);
+
+            // Step 4: Generate proof
+            console.log('🔐 Step 4: Generating wallet update proof...');
+            const userSecret = '12312';
+
+            const proofData = await generateWalletUpdateProofClient({
+                userSecret,
+                oldNonce: profile.nonce?.toString() || '0',
+                oldMerkleRoot: profile.merkle_root,
+                oldMerkleIndex: profile.merkle_index,
+                oldHashPath: profile.sibling_paths,
+                oldState,
+                newState,
+                operations
+            });
+
+            console.log('✅ Proof generated successfully:', proofData);
+
+            // Step 5: Sign newCommitment
+            console.log('🔍 Step 5: Signing newCommitment...');
+            const newCommitment = proofData.publicInputs.new_wallet_commitment;
+            const rootSignature = await signMessageWithSkRoot(newCommitment);
+            console.log('✅ Signature created!');
+
+            // Step 6: Call cancelOrder API
+            console.log('🔍 Step 6: Calling cancelOrder API...');
+            const result = await cancelOrder({
+                proof: proofData.proof,
+                publicInputs: proofData.publicInputs,
+                wallet_address: walletAddress,
+                operations,
+                signature: rootSignature
+            });
+
+            if (result.success) {
+                console.log('✅ Order cancelled successfully!', result);
+                if (result.verified) {
+                    toast.success('Order cancelled successfully!');
+                    // ✅ Refetch orders to update list
+                    const response = await getOrderList(walletId, filters);
+                    setOrders(response.data || []);
+                } else {
+                    toast.error('Order cancellation failed');
+                }
+            } else {
+                console.error('❌ Cancel order failed:', result.error);
+                toast.error(`Cancel order failed: ${result.error}`);
+            }
+
+            setCancellingOrderIndex(null);
+        } catch (error) {
+            console.error('❌ Error in cancel order process:', error);
+            toast.error(error instanceof Error ? error.message : 'Unknown error occurred');
+            setCancellingOrderIndex(null);
+        }
     };
 
     // Fetch orders on mount and when filters/authenticated changes
@@ -156,30 +278,31 @@ const OrderPanel = () => {
                                 <span className="text-xs">▼</span>
                             </div>
                         </th>
+                        <th className="text-center px-6 py-3 text-gray-400 font-normal">Action</th>
                     </tr>
                     </thead>
                     <tbody>
                     {!authenticated ? (
                         <tr>
-                            <td colSpan={7} className="text-center py-20 text-gray-400">
+                            <td colSpan={8} className="text-center py-20 text-gray-400">
                                 Sign in to view your orders.
                             </td>
                         </tr>
                     ) : loading ? (
                         <tr>
-                            <td colSpan={7} className="text-center py-20 text-gray-400">
+                            <td colSpan={8} className="text-center py-20 text-gray-400">
                                 Loading orders...
                             </td>
                         </tr>
                     ) : error ? (
                         <tr>
-                            <td colSpan={7} className="text-center py-20 text-red-500">
+                            <td colSpan={8} className="text-center py-20 text-red-500">
                                 Error: {error}
                             </td>
                         </tr>
                     ) : !hasOrders ? (
                         <tr>
-                            <td colSpan={7} className="text-center py-20 text-gray-400">
+                            <td colSpan={8} className="text-center py-20 text-gray-400">
                                 No open orders.
                             </td>
                         </tr>
@@ -250,6 +373,28 @@ const OrderPanel = () => {
                                     {/* Time */}
                                     <td className="px-6 py-4 text-right text-gray-400">
                                         {orderTime}
+                                    </td>
+
+                                    {/* Action - Cancel Button */}
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            onClick={() => handleCancelOrder(index)}
+                                            disabled={cancellingOrderIndex === index || order.status === 4} // Disable if cancelling or already cancelled
+                                            className="inline-flex items-center space-x-1 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Cancel Order"
+                                        >
+                                            {cancellingOrderIndex === index ? (
+                                                <>
+                                                    <div className="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin"></div>
+                                                    <span>Cancelling...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <X size={14} />
+                                                    <span>Cancel</span>
+                                                </>
+                                            )}
+                                        </button>
                                     </td>
                                 </tr>
                             );
