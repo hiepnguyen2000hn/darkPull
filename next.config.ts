@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
-  // Use empty turbopack config to silence the warning and continue using webpack
+  // Empty turbopack config (using webpack for production build)
   turbopack: {},
   typescript: {
     // !! WARN !!
@@ -47,8 +47,29 @@ const nextConfig: NextConfig = {
 
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@aztec/bb.js': path.resolve(__dirname, 'node_modules/@aztec/bb.js'),
+      '@aztec/bb.js': isServer
+        ? path.resolve(__dirname, 'node_modules/@aztec/bb.js/dest/node/index.js')
+        : path.resolve(__dirname, 'node_modules/@aztec/bb.js/dest/browser/index.js'),
     };
+
+    // ✅ Add conditionNames to resolve exports field correctly
+    config.resolve.conditionNames = [
+      ...(config.resolve.conditionNames || []),
+      'browser',
+      'import',
+      'require',
+      'default',
+    ];
+
+    // ✅ Add extensions for better resolution
+    config.resolve.extensions = [
+      ...(config.resolve.extensions || []),
+      '.js',
+      '.mjs',
+      '.cjs',
+      '.ts',
+      '.tsx',
+    ];
 
     // Fallback for node modules that might not be available in the browser
     if (!isServer) {
@@ -58,6 +79,12 @@ const nextConfig: NextConfig = {
         net: false,
         tls: false,
         crypto: false,
+        // ✅ Mock Node.js modules used by @privy-io -> @walletconnect -> pino
+        worker_threads: false,
+        pino: false,
+        'pino-pretty': false,
+        'thread-stream': false,
+        'sonic-boom': false,
       };
     }
 
