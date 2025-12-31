@@ -53,7 +53,7 @@ export default function ThreeCardSection() {
       >
         <div className="grid grid-cols-3 gap-6">
           {cards.map((card, i) => (
-            <motion.div key={i} style={{ y: cardYs[i] }}>
+            <motion.div key={i} >
               <SpotlightCard
                 spotlightColor={`${card.color}40`}
                 className="rounded-2xl h-full"
