@@ -8,6 +8,7 @@ import { useTokenMapping } from '@/hooks/useTokenMapping';
 import { getUserProfile, getTransferHistory, type Transfer } from '@/lib/services';
 import { extractPrivyWalletId } from '@/lib/wallet-utils';
 import Header from './Header';
+import WithdrawModal from './WithdrawModal';
 
 // Transfer direction mapping (from API string to UI display)
 const TRANSFER_DIRECTION = {
@@ -45,6 +46,7 @@ const MyAssets = () => {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
   const [showFilters, setShowFilters] = useState({
     status: false,
@@ -117,7 +119,10 @@ const MyAssets = () => {
                 Your deposits inside of DarkPool. Only you and your connected relayer can see your balances.
               </p>
             </div>
-            <button className="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white hover:bg-gray-800 transition-colors">
+            <button
+              onClick={() => setIsWithdrawModalOpen(true)}
+              className="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white hover:bg-gray-800 transition-colors"
+            >
               Withdraw
             </button>
           </div>
@@ -367,6 +372,12 @@ const MyAssets = () => {
           </div>
         </div>
       </div>
+
+      {/* Withdraw Modal */}
+      <WithdrawModal
+        isOpen={isWithdrawModalOpen}
+        onClose={() => setIsWithdrawModalOpen(false)}
+      />
     </div>
   );
 };

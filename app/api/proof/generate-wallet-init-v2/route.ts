@@ -52,7 +52,7 @@ async function deriveSkRoot(wallet: ethers.Wallet, chainId: number): Promise<big
   };
 
   const value = {
-    message: "Renegade Authentication",
+    message: "Zenigma Authentication",
   };
 
   const signature = await wallet.signTypedData(domain, types, value);

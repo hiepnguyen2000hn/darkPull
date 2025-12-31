@@ -217,7 +217,7 @@ const Header = () => {
 
             // const action: TransferAction = {
             //     type: 'transfer',
-            //     direction: 1,                    // ✅ 0 = DEPOSIT
+            //     direction: 1,                    // ✅ 1 = WITHDRAW
             //     token_index: 0,                  // ✅ Token 0 (USDC)
             //     amount: '100',             // 100 USDC (6 decimals)
             //     // ✅ Permit2 data từ handleSign
