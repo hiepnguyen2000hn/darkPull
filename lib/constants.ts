@@ -17,6 +17,14 @@ export const DARKPOOL_CORE_ADDRESS = process.env.NEXT_PUBLIC_DARKPOOL_CORE_ADDRE
 // Mock USDC contract address
 export const MOCK_USDC_ADDRESS = process.env.NEXT_PUBLIC_MOCK_USDC_ADDRESS as `0x${string}`;
 
+// WETH contract addresses by chain
+export const WETH_ADDRESSES: Record<number, `0x${string}`> = {
+  11155111: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9', // Sepolia
+  1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // Ethereum Mainnet
+  42161: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', // Arbitrum
+  10: '0x4200000000000000000000000000000000000006', // Optimism
+};
+
 // ============================================
 // API CONFIGURATION
 // ============================================

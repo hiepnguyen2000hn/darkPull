@@ -182,7 +182,8 @@ function processTransfer(
   }
 
   // Validate amount
-  const amount = BigInt(transfer.amount);
+  // const amount = BigInt(transfer.amount);
+  const amount = transfer.amount
   if (amount <= 0n) {
     throw new Error('[calculateNewState] Invalid amount: must be greater than 0');
   }

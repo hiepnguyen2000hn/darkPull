@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useWallets } from '@privy-io/react-auth';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig, useBalance } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
-import { parseUnits, formatUnits } from 'viem';
+import { parseUnits, formatUnits, formatEther } from 'viem';
 import { MOCK_USDC_ADDRESS } from '@/lib/constants';
 
 // USDC Contract Address
@@ -57,6 +57,23 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
 
   // Check if wallet is connected
   const isConnected = !!userAddress;
+
+  // ✅ Get native token balance (ETH/SepoliaETH)
+  const {
+    data: nativeBalanceData,
+    refetch: refetchNativeBalance,
+    isLoading: isLoadingNativeBalance
+  } = useBalance({
+    address: userAddress,
+    query: {
+      enabled: !!userAddress,
+    }
+  });
+
+  // Format native balance
+  const nativeBalance = nativeBalanceData
+    ? formatEther(nativeBalanceData.value)
+    : '0';
 
   // Get USDC balance
   const {
@@ -186,6 +203,14 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
     }
   };
 
+  // ✅ Helper function to get balance for any token or native
+  const getBalance = (type: 'native' | 'usdc' = 'native'): string => {
+    if (type === 'native') {
+      return nativeBalance;
+    }
+    return balance;
+  };
+
   return {
     // Connection status
     isConnected,
@@ -196,6 +221,15 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
     balanceRaw: balanceData as bigint | undefined,
     isLoadingBalance,
     refetchBalance,
+
+    // ✅ Native balance (ETH/SepoliaETH)
+    nativeBalance,
+    nativeBalanceRaw: nativeBalanceData?.value,
+    isLoadingNativeBalance,
+    refetchNativeBalance,
+
+    // ✅ Helper function to get balance
+    getBalance,
 
     // Decimals
     decimals: USDC_DECIMALS,

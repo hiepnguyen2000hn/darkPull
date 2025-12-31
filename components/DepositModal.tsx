@@ -15,8 +15,12 @@ import { usePermit2Signature } from '@/hooks/usePermit2Signature';
 import { type TransferAction, type WalletState } from '@/hooks/useProof';
 import { extractPrivyWalletId } from '@/lib/wallet-utils';
 import { signMessageWithSkRoot } from '@/lib/ethers-signer';
-import { parseUnits } from 'viem';
+import { parseUnits, parseEther } from 'viem';
 import toast from 'react-hot-toast';
+import { useSwitchChain, useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useConfig } from 'wagmi';
+import { waitForTransactionReceipt } from 'wagmi/actions';
+import { WETH_ADDRESSES } from '@/lib/constants';
+import { WETH_ABI } from '@/lib/abis/weth';
 
 interface DepositModalProps {
     isOpen: boolean;
@@ -26,20 +30,29 @@ interface DepositModalProps {
 // Token list will be updated with real balances in component
 
 const NETWORKS = [
-    { value: 'ethereum', label: 'Ethereum Mainnet' },
-    { value: 'sepolia', label: 'Sepolia Testnet' },
-    { value: 'arbitrum', label: 'Arbitrum One' },
-    { value: 'optimism', label: 'Optimism' },
+    { value: 'sepolia', label: 'Sepolia Testnet', chainId: 11155111, nativeSymbol: 'SepoliaETH' },
+    { value: 'ethereum', label: 'Ethereum Mainnet', chainId: 1, nativeSymbol: 'ETH' },
+    { value: 'arbitrum', label: 'Arbitrum One', chainId: 42161, nativeSymbol: 'ETH' },
+    { value: 'optimism', label: 'Optimism', chainId: 10, nativeSymbol: 'ETH' },
 ];
 
+type TokenType = 'native' | 'usdc';
+
 const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
-    const [selectedToken, setSelectedToken] = useState<Token | null>(null);
-    const [selectedNetwork, setSelectedNetwork] = useState('sepolia');
+    // Step 1: Chain selection
+    const [selectedChainId, setSelectedChainId] = useState<number>(11155111); // Default Sepolia
+
+    // Step 2: Token type selection
+    const [selectedTokenType, setSelectedTokenType] = useState<TokenType | null>(null);
+
+    // Step 3: Amount
     const [amount, setAmount] = useState('');
+
+    // Common states
     const [currentStep, setCurrentStep] = useState(1);
     const [errorMessage, setErrorMessage] = useState('');
-    const [isProcessing, setIsProcessing] = useState(false); // ✅ Loading state
-    const [processingStep, setProcessingStep] = useState(''); // ✅ Current processing step
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingStep, setProcessingStep] = useState('');
 
     // Fetch tokens from API with cache
     const { tokens, isLoading: isLoadingTokens } = useTokens();
@@ -48,14 +61,48 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
     const { user } = usePrivy();
     const { wallets } = useWallets();
 
+    // Wagmi hooks for chain switching
+    const { chain: currentChain } = useAccount();
+    const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
+
+    // Wagmi config for transaction receipts
+    const config = useConfig();
+
+    // WETH contract hooks
+    const { writeContractAsync: wethWriteAsync } = useWriteContract();
+
+    // Get WETH address for selected chain
+    const wethAddress = WETH_ADDRESSES[selectedChainId] as `0x${string}`;
+
+    // Get WETH allowance for Permit2
+    const {
+        data: wethAllowanceData,
+        refetch: refetchWethAllowance,
+    } = useReadContract({
+        address: wethAddress,
+        abi: WETH_ABI,
+        functionName: 'allowance',
+        args: wallets.find(w => w.connectorType === 'embedded')?.address && PERMIT2_ADDRESS
+            ? [wallets.find(w => w.connectorType === 'embedded')?.address as `0x${string}`, PERMIT2_ADDRESS]
+            : undefined,
+        query: {
+            enabled: !!(wallets.find(w => w.connectorType === 'embedded')?.address && PERMIT2_ADDRESS),
+        }
+    });
+
+    const wethAllowance = wethAllowanceData
+        ? (wethAllowanceData as bigint)
+        : BigInt(0);
+
     // Proof hooks
     const { verifyProof, calculateNewState } = useProof();
     const { generateWalletUpdateProofClient } = useWalletUpdateProof();
     const { signPermit2FE } = usePermit2Signature();
 
-    // USDC hook for balance and approve
+    // USDC hook for balance and approve (với chainId của chain đã chọn)
     const {
         balance: usdcBalance,
+        nativeBalance,
         isConnected,
         approve,
         isApprovePending,
@@ -63,14 +110,16 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
         isApproveSuccess,
         allowance,
         refetchAllowance,
-        isLoadingBalance
+        isLoadingBalance,
+        getBalance
     } = useUSDC(PERMIT2_ADDRESS);
 
     // ✅ Don't render if modal is closed
     if (!isOpen) return null;
 
     const handleClose = () => {
-        setSelectedToken(null);
+        setSelectedChainId(11155111); // Reset to Sepolia
+        setSelectedTokenType(null);
         setAmount('');
         setCurrentStep(1);
         setErrorMessage('');
@@ -83,7 +132,12 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
             setIsProcessing(true);
             setProcessingStep('Initializing...');
 
-            console.log('💰 Starting deposit process...', { selectedToken, selectedNetwork, amount });
+            console.log('💰 Starting deposit process...', {
+                selectedTokenType,
+                selectedChainId,
+                amount,
+                network: NETWORKS.find(n => n.chainId === selectedChainId)?.label
+            });
 
             if (!isConnected) {
                 toast.error('Please connect wallet first!');
@@ -91,7 +145,7 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                 return;
             }
 
-            if (!selectedToken || !amount) {
+            if (!selectedTokenType || !amount) {
                 toast.error('Missing required fields');
                 setIsProcessing(false);
                 return;
@@ -112,8 +166,11 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                 return;
             }
 
-            // Only process USDC for now
-            if (selectedToken.symbol === 'USDC') {
+            // ✅ Route to correct flow based on token type
+            if (selectedTokenType === 'usdc') {
+                // ============================================
+                // USDC DEPOSIT FLOW (EXISTING LOGIC)
+                // ============================================
                 console.log('💰 Current USDC Balance:', usdcBalance);
                 console.log('📊 Current allowance:', allowance);
 
@@ -150,12 +207,22 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                     blinder: profile.blinder,
                 };
 
+                // Get USDC token info from API
+                const usdcToken = tokens.find(t => t.symbol === 'USDC');
+                if (!usdcToken) {
+                    toast.error('USDC token not found in system');
+                    setIsProcessing(false);
+                    return;
+                }
+
                 // Step 3: Sign Permit2
                 setProcessingStep('Signing Permit2...');
                 console.log('🔍 Step 3: Signing Permit2...');
+                console.log(`  - Token: USDC (${usdcToken.address})`);
+                console.log(`  - Amount: ${amount} (${parseUnits(amount, usdcToken.decimals)} wei)`);
                 const permit2Data = await signPermit2FE({
-                    token: MOCK_USDC_ADDRESS,
-                    amount: parseUnits(amount, 6), // ✅ Convert to USDC decimals (6) using viem
+                    token: usdcToken.address,
+                    amount: parseUnits(amount, usdcToken.decimals),
                     spender: DARKPOOL_CORE_ADDRESS,
                 });
                 console.log('✅ Permit2 signed:', {
@@ -165,11 +232,13 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                 });
 
                 // Step 4: Create TransferAction
+                // ⚠️ IMPORTANT: amount must be in smallest unit (Wei for ETH, base units for USDC)
+                const amountInBaseUnits = parseUnits(amount, usdcToken.decimals).toString();
                 const action: TransferAction = {
                     type: 'transfer',
                     direction: 0,
-                    token_index: 0,
-                    amount: amount,
+                    token_index: usdcToken.index,
+                    amount: amountInBaseUnits, // ✅ String of integer (e.g. "100000" for 0.1 USDC with 6 decimals)
                     permit2Nonce: permit2Data.permit2Nonce.toString(),
                     permit2Deadline: permit2Data.permit2Deadline.toString(),
                     permit2Signature: permit2Data.permit2Signature
@@ -243,10 +312,209 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                     setProcessingStep('');
                     return;
                 }
+            } else if (selectedTokenType === 'native') {
+                // ============================================
+                // NATIVE TOKEN DEPOSIT FLOW (WETH)
+                // ============================================
+                console.log('💎 Starting Native Token deposit flow...');
+                console.log('  - Chain:', NETWORKS.find(n => n.chainId === selectedChainId)?.label);
+                console.log('  - Native Token:', NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol);
+                console.log('  - Amount:', amount);
+                console.log('  - WETH Address:', wethAddress);
+
+                const amountInWei = parseEther(amount);
+
+                // Step 1: Wrap ETH → WETH
+                setProcessingStep('Wrapping ETH to WETH...');
+                console.log('🔄 Step 1: Wrapping ETH to WETH...');
+                console.log('  - Amount:', amount, 'ETH');
+                console.log('  - Amount in Wei:', amountInWei.toString());
+
+                try {
+                    const wrapTxHash = await wethWriteAsync({
+                        address: wethAddress,
+                        abi: WETH_ABI,
+                        functionName: 'deposit',
+                        value: amountInWei,
+                    });
+
+                    console.log('⏳ Waiting for wrap transaction...', wrapTxHash);
+                    await waitForTransactionReceipt(config, {
+                        hash: wrapTxHash,
+                    });
+                    console.log('✅ ETH wrapped to WETH successfully!');
+                } catch (error) {
+                    console.error('❌ Error wrapping ETH:', error);
+                    toast.error('Failed to wrap ETH to WETH');
+                    setIsProcessing(false);
+                    setProcessingStep('');
+                    return;
+                }
+
+                // Step 2: Approve WETH to Permit2
+                setProcessingStep('Approving WETH to Permit2...');
+                console.log('🔐 Step 2: Checking WETH allowance...');
+                console.log('  - Current allowance:', wethAllowance.toString());
+                console.log('  - Required amount:', amountInWei.toString());
+
+                // Refetch allowance after wrap
+                await refetchWethAllowance();
+
+                if (wethAllowance < amountInWei) {
+                    console.log('⚠️ Insufficient allowance, approving...');
+                    try {
+                        const approveTxHash = await wethWriteAsync({
+                            address: wethAddress,
+                            abi: WETH_ABI,
+                            functionName: 'approve',
+                            args: [PERMIT2_ADDRESS, amountInWei],
+                        });
+
+                        console.log('⏳ Waiting for approve transaction...', approveTxHash);
+                        await waitForTransactionReceipt(config, {
+                            hash: approveTxHash,
+                        });
+                        console.log('✅ WETH approved to Permit2!');
+
+                        // Refetch allowance after approve
+                        await refetchWethAllowance();
+                    } catch (error) {
+                        console.error('❌ Error approving WETH:', error);
+                        toast.error('Failed to approve WETH to Permit2');
+                        setIsProcessing(false);
+                        setProcessingStep('');
+                        return;
+                    }
+                } else {
+                    console.log('✅ Allowance already sufficient!');
+                }
+
+                // Step 3: Get user profile and old state (same as USDC)
+                setProcessingStep('Fetching user profile...');
+                console.log('📊 Step 3: Fetching user profile...');
+                const walletId = extractPrivyWalletId(user.id);
+                console.log('  - Wallet ID (without prefix):', walletId);
+
+                const profile = await getUserProfile(walletId);
+                console.log('✅ Profile loaded:', profile);
+
+                const oldState: WalletState = {
+                    available_balances: profile.available_balances || Array(10).fill('0'),
+                    reserved_balances: profile.reserved_balances || Array(10).fill('0'),
+                    orders_list: profile.orders_list || Array(4).fill(null),
+                    fees: profile.fees?.toString() || '0',
+                    blinder: profile.blinder,
+                };
+
+                // Get WETH token info from API (assuming WETH is in token list)
+                // For now, we'll look for "WETH" or use index 1 (if USDC is 0)
+                const wethToken = tokens.find(t => t.symbol === 'WETH' || t.symbol === 'ETH');
+                if (!wethToken) {
+                    toast.error('WETH token not found in system. Please contact support.');
+                    setIsProcessing(false);
+                    setProcessingStep('');
+                    return;
+                }
+
+                // Step 4: Sign Permit2
+                setProcessingStep('Signing Permit2...');
+                console.log('🔍 Step 4: Signing Permit2...');
+                console.log(`  - Token: WETH (${wethAddress})`);
+                console.log(`  - Amount: ${amount} (${amountInWei} wei)`);
+                const permit2Data = await signPermit2FE({
+                    token: wethAddress,
+                    amount: amountInWei,
+                    spender: DARKPOOL_CORE_ADDRESS,
+                });
+                console.log('✅ Permit2 signed:', {
+                    nonce: permit2Data.permit2Nonce.toString(),
+                    deadline: permit2Data.permit2Deadline.toString(),
+                    signature: permit2Data.permit2Signature.substring(0, 20) + '...'
+                });
+
+                // Step 5: Create TransferAction
+                // ⚠️ IMPORTANT: amount must be in Wei (18 decimals for ETH/WETH)
+                const amountInWeiString = amountInWei.toString(); // Already parsed as BigInt earlier
+                const actionNative: TransferAction = {
+                    type: 'transfer',
+                    direction: 0,
+                    token_index: wethToken.index,
+                    amount: amountInWeiString, // ✅ String of Wei (e.g. "100000000000000" for 0.0001 ETH)
+                    permit2Nonce: permit2Data.permit2Nonce.toString(),
+                    permit2Deadline: permit2Data.permit2Deadline.toString(),
+                    permit2Signature: permit2Data.permit2Signature
+                };
+
+                // Step 6: Calculate new state
+                setProcessingStep('Calculating new state...');
+                console.log('🔐 Step 6: Calculating new state...');
+                const { newState: newStateNative, operations: operationsNative } = await calculateNewState(
+                    oldState,
+                    actionNative,
+                    profile.nonce || 0
+                );
+
+                console.log('✅ New state calculated:');
+                console.log(`  - Available Balances: [${newStateNative.available_balances.slice(0, 3).join(', ')}...]`);
+                console.log(`  - New Blinder: ${newStateNative.blinder?.substring(0, 20)}...`);
+                console.log('  - Operations:', operationsNative);
+
+                // Step 7: Generate proof
+                setProcessingStep('Generating proof (this may take a moment)...');
+                console.log('🔐 Step 7: Generating wallet update proof...');
+                const userSecret = '12312';
+
+                const proofDataNative = await generateWalletUpdateProofClient({
+                    userSecret,
+                    oldNonce: profile.nonce?.toString() || '0',
+                    oldMerkleRoot: profile.merkle_root,
+                    oldMerkleIndex: profile.merkle_index,
+                    oldHashPath: profile.sibling_paths,
+                    oldState,
+                    newState: newStateNative,
+                    operations: operationsNative
+                });
+
+                console.log('✅ Proof generated successfully:', proofDataNative);
+
+                // Step 8: Sign newCommitment
+                setProcessingStep('Signing commitment...');
+                console.log('🔍 Step 8: Signing newCommitment...');
+                const newCommitmentNative = proofDataNative.publicInputs.new_wallet_commitment;
+                const rootSignatureNative = await signMessageWithSkRoot(newCommitmentNative);
+                console.log('✅ Signature created!');
+
+                // Step 9: Verify proof
+                setProcessingStep('Verifying proof...');
+                console.log('🔍 Step 9: Verifying proof...');
+                const verifyResultNative = await verifyProof({
+                    proof: proofDataNative.proof,
+                    publicInputs: proofDataNative.publicInputs,
+                    wallet_address: walletAddress,
+                    operations: operationsNative,
+                    signature: rootSignatureNative
+                });
+
+                if (verifyResultNative.success) {
+                    console.log('✅ Native token deposit completed successfully!', verifyResultNative);
+                    setProcessingStep('Deposit completed!');
+                    if (verifyResultNative.verified) {
+                        toast.success(`Deposit verified successfully!\nAmount: ${amount} ${NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol}`, {
+                            duration: 5000,
+                        });
+                    } else {
+                        toast.error('Deposit verification failed');
+                    }
+                } else {
+                    console.error('❌ Verification failed:', verifyResultNative.error);
+                    toast.error(`Verification failed: ${verifyResultNative.error}`);
+                    setIsProcessing(false);
+                    setProcessingStep('');
+                    return;
+                }
             } else {
-                console.log('ℹ️ Token not USDC, skipping for now');
-                toast.error(`Deposit not available for ${selectedToken.symbol} yet`);
-                // ✅ Token not supported → ẩn loading, giữ modal
+                console.log('ℹ️ Unknown token type:', selectedTokenType);
+                toast.error('Invalid token type selected');
                 setIsProcessing(false);
                 setProcessingStep('');
                 return;
@@ -265,7 +533,29 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
         }
     };
 
-    const handleStepChange = (step: number) => {
+    const handleStepChange = async (step: number) => {
+        // ✅ When moving from Step 1 → Step 2, check if we need to switch chain
+        if (currentStep === 1 && step === 2) {
+            if (selectedChainId !== currentChain?.id) {
+                try {
+                    setProcessingStep('Switching chain...');
+                    setIsProcessing(true);
+
+                    await switchChain({ chainId: selectedChainId });
+
+                    toast.success(`Switched to ${NETWORKS.find(n => n.chainId === selectedChainId)?.label}`);
+                    setIsProcessing(false);
+                    setProcessingStep('');
+                } catch (error) {
+                    console.error('Failed to switch chain:', error);
+                    toast.error('Failed to switch chain. Please try again.');
+                    setIsProcessing(false);
+                    setProcessingStep('');
+                    return; // Don't proceed to next step
+                }
+            }
+        }
+
         setCurrentStep(step);
         setErrorMessage('');
     };
@@ -273,16 +563,20 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
     // Validation logic for each step
     const getValidationForCurrentStep = (): { canProceed: boolean; errorMessage: string } => {
         switch (currentStep) {
-            case 1:
-                if (!selectedToken) {
+            case 1: // Select Chain
+                // Always can proceed (chain is always selected with default)
+                return { canProceed: true, errorMessage: '' };
+
+            case 2: // Select Token Type
+                if (!selectedTokenType) {
                     return {
                         canProceed: false,
-                        errorMessage: 'Please select a token to continue'
+                        errorMessage: 'Please select a token type to continue'
                     };
                 }
                 return { canProceed: true, errorMessage: '' };
 
-            case 2:
+            case 3: // Enter Amount
                 if (!amount || parseFloat(amount) <= 0) {
                     return {
                         canProceed: false,
@@ -290,22 +584,29 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                     };
                 }
 
-                // Check if amount exceeds balance (for USDC)
-                if (selectedToken?.symbol === 'USDC') {
-                    const enteredAmount = parseFloat(amount);
+                // Check if amount exceeds balance
+                const enteredAmount = parseFloat(amount);
+                if (selectedTokenType === 'usdc') {
                     const availableBalance = parseFloat(usdcBalance);
-
                     if (enteredAmount > availableBalance) {
                         return {
                             canProceed: false,
                             errorMessage: `Insufficient balance. You have ${availableBalance} USDC`
                         };
                     }
+                } else if (selectedTokenType === 'native') {
+                    const availableBalance = parseFloat(nativeBalance);
+                    if (enteredAmount > availableBalance) {
+                        return {
+                            canProceed: false,
+                            errorMessage: `Insufficient balance. You have ${availableBalance} ${NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol}`
+                        };
+                    }
                 }
 
                 return { canProceed: true, errorMessage: '' };
 
-            case 3:
+            case 4: // Review
                 return { canProceed: true, errorMessage: '' };
 
             default:
@@ -357,142 +658,259 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                         canProceed={validation.canProceed}
                         errorMessage={validation.errorMessage}
                     >
-                        {/* Step 1: Select Token */}
+                        {/* Step 1: Select Chain */}
                         <Step>
                             <div className="space-y-4">
-                                <h3 className="text-base font-semibold text-white/90 mt-1">Choose a token to deposit</h3>
-                                {isLoadingTokens ? (
-                                    <div className="text-center py-10 text-gray-400">Loading tokens...</div>
-                                ) : (
-                                    <div className="max-h-[300px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-teal-500/50 scrollbar-track-gray-800/50 hover:scrollbar-thumb-teal-500/70 scroll-smooth">
-                                        <div className="grid gap-2.5">
-                                            {tokens.map((token) => (
-                                                <button
-                                                    key={token.symbol}
-                                                    onClick={() => setSelectedToken(token)}
-                                                    className={`group w-full p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
-                                                        selectedToken?.symbol === token.symbol
-                                                            ? 'border-teal-500 bg-teal-500/10 shadow-lg shadow-teal-500/20'
-                                                            : 'border-gray-700/70 bg-gray-800/30 hover:border-teal-500/50 hover:bg-gray-800/50'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-11 h-11 rounded-full flex items-center justify-center transition-transform group-hover:scale-110">
-                                                            <TokenIconBySymbol symbol={token.symbol} size="md" />
-                                                        </div>
-                                                        <div className="text-left">
-                                                            <div className="text-white font-semibold text-sm">{token.symbol}</div>
-                                                            <div className="text-gray-400 text-xs">{token.name}</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <div className="text-gray-500 text-xs mb-0.5">Balance</div>
-                                                        <div className="text-white/90 font-medium text-xs">
-                                                            {token.symbol === 'USDC' ? usdcBalance : '0.00'}
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            ))}
+                                <h3 className="text-base font-semibold text-white/90 mt-1">Select Network</h3>
+
+                                {/* Current Chain Info */}
+                                {currentChain && (
+                                    <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                        <div className="text-xs text-blue-300">Currently connected to:</div>
+                                        <div className="text-sm text-white font-medium mt-1">
+                                            {NETWORKS.find(n => n.chainId === currentChain.id)?.label || `Chain ID: ${currentChain.id}`}
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Network Selection */}
+                                <div className="grid gap-2.5">
+                                    {NETWORKS.map((network) => {
+                                        const isCurrentChain = currentChain?.id === network.chainId;
+                                        const isSelected = selectedChainId === network.chainId;
+
+                                        return (
+                                            <button
+                                                key={network.chainId}
+                                                onClick={() => setSelectedChainId(network.chainId)}
+                                                className={`group w-full p-4 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                                                    isSelected
+                                                        ? 'border-teal-500 bg-teal-500/10 shadow-lg shadow-teal-500/20'
+                                                        : 'border-gray-700/70 bg-gray-800/30 hover:border-teal-500/50 hover:bg-gray-800/50'
+                                                }`}
+                                            >
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500/20 to-blue-500/20 flex items-center justify-center">
+                                                        <span className="text-lg">{network.value === 'sepolia' ? '🔧' : network.value === 'ethereum' ? '⚡' : network.value === 'arbitrum' ? '🔷' : '🔴'}</span>
+                                                    </div>
+                                                    <div className="text-left">
+                                                        <div className="text-white font-semibold text-sm flex items-center gap-2">
+                                                            {network.label}
+                                                            {isCurrentChain && <span className="text-xs text-green-400">(Connected)</span>}
+                                                        </div>
+                                                        <div className="text-gray-400 text-xs">Chain ID: {network.chainId}</div>
+                                                    </div>
+                                                </div>
+                                                {!isCurrentChain && isSelected && (
+                                                    <div className="text-xs text-yellow-400">Will switch chain</div>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Switch Chain Warning */}
+                                {selectedChainId !== currentChain?.id && (
+                                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                                        <p className="text-yellow-300 text-xs">
+                                            ⚠ You will be prompted to switch to <strong>{NETWORKS.find(n => n.chainId === selectedChainId)?.label}</strong> in the next step.
+                                        </p>
                                     </div>
                                 )}
                             </div>
                         </Step>
 
-                        {/* Step 2: Network & Amount */}
+                        {/* Step 2: Select Token Type */}
                         <Step>
-                            {selectedToken ? (
-                                <div className="space-y-4">
-                                    <h3 className="text-base font-semibold text-white/90">Enter deposit details</h3>
+                            <div className="space-y-4">
+                                <h3 className="text-base font-semibold text-white/90 mt-1">Select Token Type</h3>
 
-                                {/* Selected Token Display */}
-                                <div className="p-3 bg-gradient-to-r from-teal-500/5 to-blue-500/5 border border-teal-500/30 rounded-lg flex items-center space-x-3">
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center">
-                                        <TokenIconBySymbol symbol={selectedToken.symbol} size="md" />
-                                    </div>
-                                    <div>
-                                        <div className="text-white font-semibold text-sm">{selectedToken.symbol}</div>
-                                        <div className="text-gray-400 text-xs">{selectedToken.name}</div>
+                                {/* Selected Network Display */}
+                                <div className="p-3 bg-gradient-to-r from-teal-500/5 to-blue-500/5 border border-teal-500/30 rounded-lg">
+                                    <div className="text-xs text-teal-300">Network:</div>
+                                    <div className="text-sm text-white font-medium mt-1">
+                                        {NETWORKS.find(n => n.chainId === selectedChainId)?.label}
                                     </div>
                                 </div>
 
-                                {/* Network Selection */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-300 mb-2">
-                                        Network
-                                    </label>
-                                    <select
-                                        value={selectedNetwork}
-                                        onChange={(e) => setSelectedNetwork(e.target.value)}
-                                        className="w-full px-3 py-2.5 bg-gray-800/50 border border-gray-700/70 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                                {/* Token Type Selection */}
+                                <div className="grid gap-3">
+                                    {/* Native Token */}
+                                    <button
+                                        onClick={() => setSelectedTokenType('native')}
+                                        className={`group w-full p-4 rounded-xl border-2 transition-all duration-200 ${
+                                            selectedTokenType === 'native'
+                                                ? 'border-teal-500 bg-teal-500/10 shadow-lg shadow-teal-500/20'
+                                                : 'border-gray-700/70 bg-gray-800/30 hover:border-teal-500/50 hover:bg-gray-800/50'
+                                        }`}
                                     >
-                                        {NETWORKS.map((network) => (
-                                            <option key={network.value} value={network.value}>
-                                                {network.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Amount Input */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-300 mb-2">
-                                        Amount
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={amount}
-                                            onChange={(e) => setAmount(e.target.value)}
-                                            placeholder="0.00"
-                                            className="w-full px-3 py-2.5 pr-16 bg-gray-800/50 border border-gray-700/70 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
-                                        />
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-xs">
-                                            {selectedToken.symbol}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
+                                                    <span className="text-2xl">💎</span>
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="text-white font-semibold text-sm">
+                                                        {NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol}
+                                                    </div>
+                                                    <div className="text-gray-400 text-xs">Native Token</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-gray-500 text-xs mb-0.5">Balance</div>
+                                                <div className="text-white/90 font-medium text-sm">
+                                                    {isLoadingBalance ? '...' : nativeBalance}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="mt-2 text-xs text-gray-500">
-                                        Available: <span className="text-gray-400 font-medium">
-                                            {selectedToken.symbol === 'USDC' ? usdcBalance : '0.00'} {selectedToken.symbol}
-                                        </span>
-                                    </div>
+                                    </button>
+
+                                    {/* USDC */}
+                                    <button
+                                        onClick={() => setSelectedTokenType('usdc')}
+                                        className={`group w-full p-4 rounded-xl border-2 transition-all duration-200 ${
+                                            selectedTokenType === 'usdc'
+                                                ? 'border-teal-500 bg-teal-500/10 shadow-lg shadow-teal-500/20'
+                                                : 'border-gray-700/70 bg-gray-800/30 hover:border-teal-500/50 hover:bg-gray-800/50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-11 h-11 rounded-full flex items-center justify-center">
+                                                    <TokenIconBySymbol symbol="USDC" size="md" />
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="text-white font-semibold text-sm">USDC</div>
+                                                    <div className="text-gray-400 text-xs">USD Coin</div>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-gray-500 text-xs mb-0.5">Balance</div>
+                                                <div className="text-white/90 font-medium text-sm">
+                                                    {isLoadingBalance ? '...' : usdcBalance}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
                                 </div>
                             </div>
+                        </Step>
+
+                        {/* Step 3: Enter Amount */}
+                        <Step>
+                            {selectedTokenType ? (
+                                <div className="space-y-4">
+                                    <h3 className="text-base font-semibold text-white/90">Enter Amount</h3>
+
+                                    {/* Token Info Display */}
+                                    <div className="p-3 bg-gradient-to-r from-teal-500/5 to-blue-500/5 border border-teal-500/30 rounded-lg flex items-center justify-between">
+                                        <div className="flex items-center space-x-3">
+                                            <div className="w-10 h-10 rounded-full flex items-center justify-center">
+                                                {selectedTokenType === 'native' ? (
+                                                    <span className="text-xl">💎</span>
+                                                ) : (
+                                                    <TokenIconBySymbol symbol="USDC" size="md" />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="text-white font-semibold text-sm">
+                                                    {selectedTokenType === 'native'
+                                                        ? NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol
+                                                        : 'USDC'}
+                                                </div>
+                                                <div className="text-gray-400 text-xs">
+                                                    on {NETWORKS.find(n => n.chainId === selectedChainId)?.label}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Amount Input */}
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-300 mb-2">
+                                            Amount
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={amount}
+                                                onChange={(e) => setAmount(e.target.value)}
+                                                placeholder="0.00"
+                                                className="w-full px-3 py-2.5 pr-20 bg-gray-800/50 border border-gray-700/70 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all"
+                                            />
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-xs">
+                                                {selectedTokenType === 'native'
+                                                    ? NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol
+                                                    : 'USDC'}
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-2 space-y-1">
+                                            {/* Available Balance */}
+                                            <div className="text-xs text-gray-500">
+                                                Available: <span className="text-gray-400 font-medium">
+                                                    {selectedTokenType === 'usdc' ? usdcBalance : nativeBalance}
+                                                    {' '}
+                                                    {selectedTokenType === 'native'
+                                                        ? NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol
+                                                        : 'USDC'}
+                                                </span>
+                                            </div>
+
+                                            {/* Gas fee warning for native */}
+                                            {selectedTokenType === 'native' && (
+                                                <div className="text-xs text-yellow-500">
+                                                    ⚠ Reserve some balance for gas fees
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             ) : (
                                 <div className="text-center py-10 text-gray-400">
-                                    Please select a token first
+                                    Please select a token type first
                                 </div>
                             )}
                         </Step>
 
-                        {/* Step 3: Review */}
+                        {/* Step 4: Review */}
                         <Step>
-                            {selectedToken && amount ? (
+                            {selectedTokenType && amount ? (
                                 <div className="space-y-5">
                                     <h3 className="text-base font-semibold text-white/90 mb-4">Review your deposit</h3>
 
                                 <div className="p-6 bg-gradient-to-br from-teal-500/10 via-blue-500/5 to-purple-500/10 border border-teal-500/30 rounded-xl space-y-4 shadow-xl shadow-teal-500/5">
                                     <div className="flex items-center justify-between py-3 border-b border-gray-700/50">
-                                        <span className="text-gray-400 text-sm">Token</span>
-                                        <div className="flex items-center space-x-2">
-                                            <div className="w-8 h-8 rounded-full flex items-center justify-center">
-                                                <TokenIconBySymbol symbol={selectedToken.symbol} size="sm" />
-                                            </div>
-                                            <span className="text-white font-semibold">{selectedToken.symbol}</span>
-                                        </div>
+                                        <span className="text-gray-400 text-sm">Network</span>
+                                        <span className="text-white font-medium text-sm">
+                                            {NETWORKS.find(n => n.chainId === selectedChainId)?.label}
+                                        </span>
                                     </div>
 
                                     <div className="flex items-center justify-between py-3 border-b border-gray-700/50">
-                                        <span className="text-gray-400 text-sm">Network</span>
-                                        <span className="text-white font-medium text-sm">
-                                            {NETWORKS.find(n => n.value === selectedNetwork)?.label}
-                                        </span>
+                                        <span className="text-gray-400 text-sm">Token</span>
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                                                {selectedTokenType === 'native' ? (
+                                                    <span className="text-lg">💎</span>
+                                                ) : (
+                                                    <TokenIconBySymbol symbol="USDC" size="sm" />
+                                                )}
+                                            </div>
+                                            <span className="text-white font-semibold">
+                                                {selectedTokenType === 'native'
+                                                    ? NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol
+                                                    : 'USDC'}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center justify-between py-3">
                                         <span className="text-gray-400 text-sm">Amount</span>
                                         <span className="text-teal-400 font-bold text-xl">
-                                            {amount} {selectedToken.symbol}
+                                            {amount} {selectedTokenType === 'native'
+                                                ? NETWORKS.find(n => n.chainId === selectedChainId)?.nativeSymbol
+                                                : 'USDC'}
                                         </span>
                                     </div>
                                 </div>

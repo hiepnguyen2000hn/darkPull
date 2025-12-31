@@ -28,20 +28,6 @@ import { useEffect } from 'react';
 export default function BalanceProvider({ children }: { children: React.ReactNode }) {
   const { isLoading, refetch, isConnected } = useBalances();
 
-  // TODO: Realtime update - CHƯA IMPLEMENT
-  // Có thể uncomment một trong các strategies bên dưới
-
-  // Strategy 1: Polling (Simple, works everywhere)
-  // useEffect(() => {
-  //   if (!isConnected) return;
-  //
-  //   const interval = setInterval(() => {
-  //     console.log('🔄 Refetching balances...');
-  //     refetch();
-  //   }, 30000); // 30 seconds
-  //
-  //   return () => clearInterval(interval);
-  // }, [isConnected, refetch]);
 
   // Log khi connect/disconnect
   useEffect(() => {
@@ -52,6 +38,5 @@ export default function BalanceProvider({ children }: { children: React.ReactNod
     }
   }, [isConnected]);
 
-  // Không render gì, chỉ chạy logic
   return <>{children}</>;
 }

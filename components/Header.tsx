@@ -64,8 +64,6 @@ const Header = () => {
     }
     const hdlApproveUSDC = async () => {
         try {
-            // exportWallet(); // For debugging purposes
-            // return
             if (!isConnected) {
                 toast.error('Please connect wallet first!');
                 return;
