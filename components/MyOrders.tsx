@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ChevronDown, Calendar, X } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, Calendar, X, Circle } from 'lucide-react';
 import { usePrivy } from '@privy-io/react-auth';
 import { TokenIconBySymbol } from './TokenSelector';
 import { useTokenMapping } from '@/hooks/useTokenMapping';
@@ -13,6 +13,7 @@ import { signMessageWithSkRoot } from '@/lib/ethers-signer';
 import { useWallets } from '@privy-io/react-auth';
 import toast from 'react-hot-toast';
 import Header from './Header';
+import { useTokens } from '@/hooks/useTokens';
 
 // Order status mapping (dark theme colors)
 const ORDER_STATUS = {
@@ -39,11 +40,17 @@ const MyOrders = () => {
   const { authenticated, user } = usePrivy();
   const { wallets } = useWallets();
   const { getSymbol } = useTokenMapping();
+  const { tokens } = useTokens();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
   const [cancellingOrders, setCancellingOrders] = useState<Set<number>>(new Set());
+
+  // Dropdown refs
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const sideDropdownRef = useRef<HTMLDivElement>(null);
+  const tokenDropdownRef = useRef<HTMLDivElement>(null);
 
   // Proof hooks
   const { calculateNewState, cancelOrder } = useProof();
@@ -69,6 +76,33 @@ const MyOrders = () => {
       page: newFilters.page ?? 1,
     }));
   };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setFiltersState({
+      status: ['Created'],
+      page: 1,
+      limit: 20,
+    });
+  };
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setShowFilters(prev => ({ ...prev, status: false }));
+      }
+      if (sideDropdownRef.current && !sideDropdownRef.current.contains(event.target as Node)) {
+        setShowFilters(prev => ({ ...prev, side: false }));
+      }
+      if (tokenDropdownRef.current && !tokenDropdownRef.current.contains(event.target as Node)) {
+        setShowFilters(prev => ({ ...prev, token: false }));
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Handle select/deselect order
   const toggleSelectOrder = (index: number) => {
@@ -241,37 +275,133 @@ const MyOrders = () => {
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Status Filter */}
-              <div className="relative">
+              <div ref={statusDropdownRef} className="relative">
                 <button
                   onClick={() => setShowFilters({ ...showFilters, status: !showFilters.status })}
-                  className="flex items-center gap-2 px-4 py-2 bg-black border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 bg-black border rounded-lg text-sm transition-colors ${
+                    filters.status && filters.status.length > 0
+                      ? 'border-gray-600 text-white'
+                      : 'border-gray-700 text-gray-300 hover:border-gray-600 hover:text-white'
+                  }`}
                 >
                   <span>Status</span>
-                  <ChevronDown size={16} />
+                  <ChevronDown size={16} className={`transition-transform ${showFilters.status ? 'rotate-180' : ''}`} />
                 </button>
+
+                {showFilters.status && (
+                  <div className="absolute top-full mt-1 left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[140px]">
+                    <button
+                      onClick={() => {
+                        setFilter({ status: ['Created'] });
+                        setShowFilters({ ...showFilters, status: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-green-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                    >
+                      <Circle className="w-3 h-3 text-green-500 fill-green-500" />
+                      <span>Open</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFilter({ status: ['Matching'] });
+                        setShowFilters({ ...showFilters, status: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-yellow-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                    >
+                      <Circle className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                      <span>Pending</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFilter({ status: ['Cancelled'] });
+                        setShowFilters({ ...showFilters, status: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                    >
+                      <Circle className="w-3 h-3 text-gray-500 fill-gray-500" />
+                      <span>Cancelled</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Side Filter */}
-              <div className="relative">
+              <div ref={sideDropdownRef} className="relative">
                 <button
                   onClick={() => setShowFilters({ ...showFilters, side: !showFilters.side })}
-                  className="flex items-center gap-2 px-4 py-2 bg-black border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 bg-black border rounded-lg text-sm transition-colors ${
+                    filters.side !== undefined
+                      ? 'border-gray-600 text-white'
+                      : 'border-gray-700 text-gray-300 hover:border-gray-600 hover:text-white'
+                  }`}
                 >
                   <span>Side</span>
-                  <ChevronDown size={16} />
+                  <ChevronDown size={16} className={`transition-transform ${showFilters.side ? 'rotate-180' : ''}`} />
                 </button>
+
+                {showFilters.side && (
+                  <div className="absolute top-full mt-1 left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[120px]">
+                    <button
+                      onClick={() => {
+                        setFilter({ side: 0 });
+                        setShowFilters({ ...showFilters, side: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-green-500 hover:bg-gray-800 transition-colors"
+                    >
+                      Buy
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFilter({ side: 1 });
+                        setShowFilters({ ...showFilters, side: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-800 transition-colors"
+                    >
+                      Sell
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Token Filter */}
-              <div className="relative">
+              <div ref={tokenDropdownRef} className="relative">
                 <button
                   onClick={() => setShowFilters({ ...showFilters, token: !showFilters.token })}
-                  className="flex items-center gap-2 px-4 py-2 bg-black border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-gray-600 hover:text-white transition-colors"
+                  className={`flex items-center gap-2 px-4 py-2 bg-black border rounded-lg text-sm transition-colors ${
+                    filters.token !== undefined
+                      ? 'border-gray-600 text-white'
+                      : 'border-gray-700 text-gray-300 hover:border-gray-600 hover:text-white'
+                  }`}
                 >
                   <span>Token</span>
-                  <ChevronDown size={16} />
+                  <ChevronDown size={16} className={`transition-transform ${showFilters.token ? 'rotate-180' : ''}`} />
                 </button>
+
+                {showFilters.token && (
+                  <div className="absolute top-full mt-1 left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[160px] max-h-64 overflow-y-auto">
+                    {tokens.map((token) => (
+                      <button
+                        key={token.index}
+                        onClick={() => {
+                          setFilter({ token: token.index });
+                          setShowFilters({ ...showFilters, token: false });
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                      >
+                        <TokenIconBySymbol symbol={token.symbol} size="sm" />
+                        <span>{token.symbol}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* Clear button */}
+              <button
+                onClick={clearFilters}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                Clear
+              </button>
 
               {/* From Date */}
               <div className="relative">
