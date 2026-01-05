@@ -6,7 +6,6 @@ import { useTokens } from '@/hooks/useTokens';
 import { getAvailableERC20Tokens } from '@/lib/constants';
 import { TokenIconBySymbol } from './TokenSelector';
 import DepositModal from './DepositModal';
-import { formatUnits } from 'viem';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -40,19 +39,15 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
         if (!profile || !apiTokens || apiTokens.length === 0) return [];
 
         return apiTokens.map((token, index) => {
-            // Get balance from profile's available_balances array
-            const balanceRaw = profile.available_balances?.[index] || '0';
-
-            // Format balance with correct decimals
-            const balanceFormatted = formatUnits(BigInt(balanceRaw), token.decimals);
+            // Get balance from profile's available_balances array (already formatted by backend)
+            const balance = profile.available_balances?.[index] || '0';
 
             // Get icon from ERC20_TOKENS config
             const tokenConfig = erc20TokensConfig.find(t => t.symbol === token.symbol);
 
             return {
                 ...token,
-                balance: balanceFormatted,
-                balanceRaw,
+                balance,
                 icon: tokenConfig?.icon,
             };
         });
@@ -78,7 +73,7 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
             <motion.aside
                 initial={false}
                 animate={{
-                    width: isOpen ? 384 : 0, // 384px = w-96
+                    width: isOpen ? 280 : 0, // 280px - Compact portfolio
                     borderLeftWidth: isOpen ? 1 : 0,
                 }}
                 transition={{
@@ -90,20 +85,20 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                 className="bg-black border-l border-gray-800 flex flex-col flex-shrink-0 overflow-hidden"
             >
                 {/* Inner wrapper to maintain width */}
-                <div className="w-96 flex flex-col h-full">
+                <div className="w-[280px] flex flex-col h-full">
                     {/* Header with Close Button */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: isOpen ? 1 : 0 }}
                         transition={{ delay: isOpen ? 0.1 : 0 }}
-                        className="flex items-center justify-between p-4 border-b border-gray-800"
+                        className="flex items-center justify-between p-3 border-b border-gray-800"
                     >
-                        <h2 className="text-lg font-semibold text-white">Assets</h2>
+                        <h2 className="text-base font-semibold text-white">Assets</h2>
                         <button
                             onClick={onClose}
-                            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                            className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
                         >
-                            <X size={20} className="text-gray-400" />
+                            <X size={18} className="text-gray-400" />
                         </button>
                     </motion.div>
 
@@ -113,7 +108,7 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: isOpen ? 1 : 0 }}
                             transition={{ delay: isOpen ? 0.15 : 0 }}
-                            className="p-4 space-y-2"
+                            className="p-3 space-y-1.5"
                         >
                             {isLoading ? (
                             // Loading skeleton - Compact
@@ -124,14 +119,14 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                         initial={{ opacity: 0, x: 20 }}
                                         animate={{ opacity: isOpen ? 1 : 0, x: isOpen ? 0 : 20 }}
                                         transition={{ delay: isOpen ? 0.05 * i : 0 }}
-                                        className="p-3 bg-gray-900/50 rounded-lg animate-pulse"
+                                        className="p-2 bg-gray-900/50 rounded-lg animate-pulse"
                                     >
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-2">
-                                                <div className="w-8 h-8 bg-gray-800 rounded-full"></div>
-                                                <div className="h-3 w-12 bg-gray-800 rounded"></div>
+                                                <div className="w-7 h-7 bg-gray-800 rounded-full"></div>
+                                                <div className="h-3 w-10 bg-gray-800 rounded"></div>
                                             </div>
-                                            <div className="h-3 w-16 bg-gray-800 rounded"></div>
+                                            <div className="h-3 w-12 bg-gray-800 rounded"></div>
                                         </div>
                                     </motion.div>
                                 ))}
@@ -165,7 +160,7 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                             stiffness: 300,
                                             damping: 25,
                                         }}
-                                        className={`p-3 rounded-lg border transition-all duration-200 ${
+                                        className={`p-2 rounded-lg border transition-all duration-200 ${
                                             hasBalance
                                                 ? 'bg-gray-900/50 border-gray-800 hover:border-teal-500/50'
                                                 : 'bg-gray-900/20 border-gray-800/50 opacity-50'
@@ -173,12 +168,12 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                     >
                                         <div className="flex items-center justify-between">
                                             {/* Token Info */}
-                                            <div className="flex items-center space-x-2">
-                                                <div className="w-8 h-8 rounded-full flex items-center justify-center">
-                                                    <TokenIconBySymbol symbol={token.symbol} size="md" />
+                                            <div className="flex items-center space-x-1.5">
+                                                <div className="w-7 h-7 rounded-full flex items-center justify-center">
+                                                    <TokenIconBySymbol symbol={token.symbol} size="sm" />
                                                 </div>
                                                 <div>
-                                                    <div className="text-white font-semibold text-xs">
+                                                    <div className="text-white font-semibold text-[11px]">
                                                         {token.symbol}
                                                     </div>
                                                 </div>
@@ -186,17 +181,8 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
 
                                             {/* Balance */}
                                             <div className="text-right">
-                                                <div className={`font-semibold text-xs ${hasBalance ? 'text-white' : 'text-gray-600'}`}>
-                                                    {balance.toLocaleString('en-US', {
-                                                        minimumFractionDigits: 2,
-                                                        maximumFractionDigits: 4,
-                                                    })}
-                                                </div>
-                                                <div className="text-gray-500 text-[10px]">
-                                                    ${balance.toLocaleString('en-US', {
-                                                        minimumFractionDigits: 2,
-                                                        maximumFractionDigits: 2,
-                                                    })}
+                                                <div className={`font-semibold text-[11px] ${hasBalance ? 'text-white' : 'text-gray-600'}`}>
+                                                    {token.balance}
                                                 </div>
                                             </div>
                                         </div>

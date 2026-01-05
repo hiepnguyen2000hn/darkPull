@@ -402,30 +402,30 @@ const OrderPanel = () => {
                 <table className="w-full text-sm">
                     <thead>
                     <tr className="border-b border-gray-800">
-                        <th className="text-left px-6 py-3 text-gray-400 font-normal">Status</th>
-                        <th className="text-left px-6 py-3 text-gray-400 font-normal">Side</th>
-                        <th className="text-left px-6 py-3 text-gray-400 font-normal">Asset</th>
-                        <th className="text-right px-6 py-3 text-gray-400 font-normal">Price</th>
-                        <th className="text-right px-6 py-3 text-gray-400 font-normal">
+                        <th className="text-left px-3 py-2 text-gray-400 font-normal text-xs">Status</th>
+                        <th className="text-left px-3 py-2 text-gray-400 font-normal text-xs">Side</th>
+                        <th className="text-left px-3 py-2 text-gray-400 font-normal text-xs">Asset</th>
+                        <th className="text-right px-3 py-2 text-gray-400 font-normal text-xs">Price</th>
+                        <th className="text-right px-3 py-2 text-gray-400 font-normal text-xs">
                             <div className="flex items-center justify-end space-x-1">
                                 <span>Size</span>
                                 <span className="text-xs">◇</span>
                             </div>
                         </th>
-                        <th className="text-right px-6 py-3 text-gray-400 font-normal">
+                        <th className="text-right px-3 py-2 text-gray-400 font-normal text-xs">
                             <div className="flex items-center justify-end space-x-1">
-                                <span>Order Value</span>
+                                <span>Value</span>
                                 <span className="text-xs">▲</span>
                             </div>
                         </th>
-                        <th className="text-right px-6 py-3 text-gray-400 font-normal">Filled</th>
-                        <th className="text-right px-6 py-3 text-gray-400 font-normal">
+                        <th className="text-right px-3 py-2 text-gray-400 font-normal text-xs">Filled</th>
+                        <th className="text-right px-3 py-2 text-gray-400 font-normal text-xs">
                             <div className="flex items-center justify-end space-x-1">
                                 <span>Time</span>
                                 <span className="text-xs">▼</span>
                             </div>
                         </th>
-                        <th className="text-center px-6 py-3 text-gray-400 font-normal">Action</th>
+                        <th className="text-center px-3 py-2 text-gray-400 font-normal text-xs">Action</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -476,77 +476,79 @@ const OrderPanel = () => {
                             return (
                                 <tr key={index} className="border-b border-gray-800 hover:bg-gray-900/50 transition-colors">
                                     {/* Status */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center space-x-2">
-                                            <Circle className={`w-3 h-3 ${status.dotColor}`} />
-                                            <span className={status.color}>{status.label}</span>
+                                    <td className="px-3 py-3">
+                                        <div className="flex items-center space-x-1.5">
+                                            <Circle className={`w-2.5 h-2.5 ${status.dotColor}`} />
+                                            <span className={`${status.color} text-xs`}>{status.label}</span>
                                         </div>
                                     </td>
 
                                     {/* Side */}
-                                    <td className="px-6 py-4">
-                                        <span className={`font-medium ${isBuy ? 'text-green-500' : 'text-red-500'}`}>
+                                    <td className="px-3 py-3">
+                                        <span className={`font-medium text-xs ${isBuy ? 'text-green-500' : 'text-red-500'}`}>
                                             {isBuy ? 'Buy' : 'Sell'}
                                         </span>
                                     </td>
 
                                     {/* Asset */}
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center space-x-2">
+                                    <td className="px-3 py-3">
+                                        <div className="flex items-center space-x-1.5">
                                             <TokenIconBySymbol symbol={assetSymbol} size="sm" />
-                                            <span className="text-white font-medium">
+                                            <span className="text-white font-medium text-xs">
                                                 {assetSymbol}/{quoteSymbol}
                                             </span>
                                         </div>
                                     </td>
 
                                     {/* Price */}
-                                    <td className="px-6 py-4 text-right text-white">
-                                        {order.price} {quoteSymbol}
+                                    <td className="px-3 py-3 text-right text-white text-xs">
+                                        {order.price}
                                     </td>
 
                                     {/* Size */}
-                                    <td className="px-6 py-4 text-right text-white">
-                                        {order.size} {assetSymbol}
+                                    <td className="px-3 py-3 text-right text-white text-xs">
+                                        {order.size}
                                     </td>
 
                                     {/* Order Value */}
-                                    <td className="px-6 py-4 text-right text-white">
-                                        {order.order_value.toFixed(2)} {quoteSymbol}
+                                    <td className="px-3 py-3 text-right text-white text-xs">
+                                        {order.order_value.toFixed(2)}
                                     </td>
 
                                     {/* Filled */}
-                                    <td className="px-6 py-4 text-right">
-                                        <span className={order.filled > 0 ? 'text-white' : 'text-gray-400'}>
+                                    <td className="px-3 py-3 text-right">
+                                        <span className={`text-xs ${order.filled > 0 ? 'text-white' : 'text-gray-400'}`}>
                                             {filledPercent}%
                                         </span>
                                     </td>
 
                                     {/* Time */}
-                                    <td className="px-6 py-4 text-right text-gray-400">
+                                    <td className="px-3 py-3 text-right text-gray-400 text-xs">
                                         {orderTime}
                                     </td>
 
-                                    {/* Action - Cancel Button */}
-                                    <td className="px-6 py-4 text-center">
-                                        <button
-                                            onClick={() => handleCancelOrder(order.order_index)}
-                                            disabled={cancellingOrderIndex === order.order_index || order.status === 'Cancelled'} // Disable if cancelling or already cancelled
-                                            className="inline-flex items-center space-x-1 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Cancel Order"
-                                        >
-                                            {cancellingOrderIndex === order.order_index ? (
-                                                <>
-                                                    <div className="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin"></div>
-                                                    <span>Cancelling...</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <X size={14} />
-                                                    <span>Cancel</span>
-                                                </>
-                                            )}
-                                        </button>
+                                    {/* Action - Cancel Button (Only show for Created status) */}
+                                    <td className="px-3 py-3 text-center">
+                                        {order.status === 'Created' && (
+                                            <button
+                                                onClick={() => handleCancelOrder(order.order_index)}
+                                                disabled={cancellingOrderIndex === order.order_index}
+                                                className="inline-flex items-center space-x-1 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-500 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                title="Cancel Order"
+                                            >
+                                                {cancellingOrderIndex === order.order_index ? (
+                                                    <>
+                                                        <div className="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin"></div>
+                                                        <span>Cancelling...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <X size={14} />
+                                                        <span>Cancel</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             );
