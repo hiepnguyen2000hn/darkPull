@@ -11,7 +11,7 @@ import toast from "react-hot-toast";
 interface ConnectButtonProps {
     className?: string;
     onClick?: () => void;
-    onLoginSuccess?: () => void | Promise<void>;
+    onLoginSuccess?: (is_initialized?: boolean) => void | Promise<void>;
     onToggleSidebar?: () => void;
 }
 
@@ -80,50 +80,51 @@ const ConnectButton = ({ className = "", onClick, onLoginSuccess, onToggleSideba
             const profileData = await fetchProfile(walletId);
 
             console.log("✅ [loadUserProfile] Profile loaded successfully!");
+            console.log("📊 [loadUserProfile] Profile data:", {
+                is_initialized: profileData.is_initialized,
+                wallet_id: profileData.wallet_id
+            });
 
-            // ✅ Step 5: Check if wallet needs initialization
-            if (profileData.is_initialized) {
-                console.log("✅ [loadUserProfile] User already initialized");
-                return true;
+            // ✅ Step 5: Check wallet initialization status and trigger onLoginSuccess
+            console.log("📊 [loadUserProfile] Checking initialization status...");
+
+            // ✅ Step 6: Always call onLoginSuccess with is_initialized parameter
+            if (onLoginSuccess) {
+                await onLoginSuccess(profileData.is_initialized);
             } else {
-                console.log("⚠️ [loadUserProfile] User not initialized yet");
-
-                // Call initialization callback if provided
-                if (onLoginSuccess) {
-                    console.log("🚀 [loadUserProfile] Calling onLoginSuccess to initialize wallet...");
-                    await onLoginSuccess();
-                }
-
-                return true;
+                console.warn("⚠️ [loadUserProfile] No onLoginSuccess callback provided");
             }
+
+            return true;
 
         } catch (error) {
             console.error("❌ [loadUserProfile] Error loading profile:", error);
 
-            // Specific error messages
+            // Handle specific error cases
             if (error instanceof Error) {
                 if (error.message.includes('401')) {
+                    // Authentication failed - user needs to login again
+                    console.error("❌ [loadUserProfile] Authentication error - token invalid or expired");
                     toast.error("Authentication failed. Please login again.");
+                    return false;
                 } else if (error.message.includes('404')) {
-                    toast.error("User profile not found");
+                    // Profile not found - this might be a new user
+                    console.warn("⚠️ [loadUserProfile] Profile not found (404) - might be new user");
+                    console.log("ℹ️ [loadUserProfile] User needs to initialize wallet manually");
+                    toast.error("Profile not found. Please initialize your wallet.");
+                    return false;
                 } else {
+                    // Other errors
+                    console.error("❌ [loadUserProfile] Unexpected error:", error.message);
                     toast.error(`Failed to load profile: ${error.message}`);
+                    return false;
                 }
             } else {
+                // Unknown error type
+                console.error("❌ [loadUserProfile] Unknown error type:", error);
                 toast.error("Failed to load profile");
+                return false;
             }
-
-            // If profile load fails and user is not initialized, try to initialize
-            if (onLoginSuccess) {
-                console.log("🚀 [loadUserProfile] Calling onLoginSuccess as fallback...");
-                try {
-                    await onLoginSuccess();
-                } catch (initError) {
-                    console.error("❌ [loadUserProfile] Initialization also failed:", initError);
-                }
-            }
-
-            return false;
         }
     };
 
