@@ -54,6 +54,24 @@ const MyAssets = () => {
     asset: false,
   });
 
+  // ✅ Fetch transfer history helper function
+  const fetchTransferHistory = async () => {
+    if (!user?.id) return;
+
+    try {
+      const walletId = extractPrivyWalletId(user.id);
+      console.log('🔄 Refetching transfer history for wallet:', walletId);
+      const transferResponse = await getTransferHistory(walletId, {
+        page: 1,
+        limit: 20,
+      });
+      console.log('✅ Transfer history refreshed:', transferResponse);
+      setTransfers(transferResponse.data || []);
+    } catch (err) {
+      console.error('Failed to refetch transfer history:', err);
+    }
+  };
+
   // Fetch user profile and calculate assets
   useEffect(() => {
     if (!authenticated || !user?.id) {
@@ -377,6 +395,7 @@ const MyAssets = () => {
       <WithdrawModal
         isOpen={isWithdrawModalOpen}
         onClose={() => setIsWithdrawModalOpen(false)}
+        onWithdrawSuccess={fetchTransferHistory}
       />
     </div>
   );
