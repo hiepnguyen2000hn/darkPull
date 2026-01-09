@@ -8,7 +8,6 @@ import {useHeroEntrance} from "@/hooks/useScrollAnimation";
 import {useCounterAnimation} from "@/hooks/useCounterAnimation";
 // import ParticleSystem from "../ParticleSystem";
 import SplineScene from '../SplineScene';
-import Spline from '@splinetool/react-spline';
 
 export default function HeroLanding() {
     const ref = useRef(null);
@@ -56,8 +55,8 @@ export default function HeroLanding() {
             {/* ✅ Spline 3D Background - FULLSCREEN */}
             <div className="absolute inset-0 z-0">
                 <SplineScene
-                    sceneUrl="https://prod.spline.design/Q2dmLo5IogYHjFSg/scene.splinecode"
-
+                    sceneUrl="https://prod.spline.design/mXdEeq6CZW9eQ6m0/scene.splinecode"
+                    enableInteraction={true}
                 />
             </div>
 

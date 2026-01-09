@@ -1,14 +1,8 @@
 "use client";
 
 import { memo, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-
-// ✅ Import Spline với proper error handling
-const Spline = dynamic(() => import('@splinetool/react-spline'), {
-  ssr: false,
-  loading: () => null, // ✅ Dùng null thay vì div để tránh layout shift
-});
+import Spline from '@splinetool/react-spline';
 
 interface SplineSceneProps {
   sceneUrl: string;
@@ -17,6 +11,13 @@ interface SplineSceneProps {
 
 const SplineScene = memo(({ sceneUrl, enableInteraction = true }: SplineSceneProps) => {
   const router = useRouter();
+
+  // ✅ Debug mount
+  useEffect(() => {
+    console.log('🚀 SplineScene mounted');
+    console.log('Scene URL:', sceneUrl);
+    console.log('Interaction enabled:', enableInteraction);
+  }, []);
 
   // ✅ Cleanup cursor
   useEffect(() => {
@@ -27,15 +28,34 @@ const SplineScene = memo(({ sceneUrl, enableInteraction = true }: SplineScenePro
 
   // ✅ Handle click
   function onSplineClick(e: any) {
+    console.log('🎯 onSplineClick triggered!');
+    console.log('enableInteraction:', enableInteraction);
+    console.log('Event:', e);
+    console.log('Target:', e.target);
+    console.log('Target name:', e.target?.name);
+    console.log('Target id:', e.target?.id);
+    console.log('Target type:', e.target?.type);
+
     if (!enableInteraction) {
       console.log('Interaction disabled');
-      return; // ✅ FIX: Thêm return
+      return;
     }
 
     const targetName = e.target?.name;
-    console.log('🖱️ Clicked:', targetName);
+    console.log('🖱️ CLICKED OBJECT NAME:', targetName);
+
+    // ⚠️ ALWAYS log unhandled clicks to see what objects are clickable
+    if (!targetName) {
+      console.warn('⚠️ Clicked object has no name!');
+      return;
+    }
 
     switch(targetName) {
+      case 'CTA':
+        console.log('🚀 CTA clicked! Navigating to Trading Dashboard...');
+        router.push('/TradingDashboard/btc-usdc');
+        break;
+
       case 'ACCESS TERMINAL':
       case 'TERMINAL':
         console.log('Opening terminal...');
@@ -76,9 +96,8 @@ const SplineScene = memo(({ sceneUrl, enableInteraction = true }: SplineScenePro
         break;
 
       default:
-        if (targetName) {
-          console.log('⚠️ Unhandled click:', targetName);
-        }
+        console.warn('⚠️ UNHANDLED CLICK - Object name:', targetName);
+        console.warn('💡 Add this name to the switch statement to handle it!');
         break;
     }
   }
@@ -89,7 +108,13 @@ const SplineScene = memo(({ sceneUrl, enableInteraction = true }: SplineScenePro
 
     const targetName = e.target?.name;
 
+    // Debug: log all hover events
+    if (targetName) {
+      console.log('👆 Hovering over:', targetName);
+    }
+
     if (targetName && (
+        targetName === 'CTA' ||
         targetName.includes('JOIN') ||
         targetName.includes('HARVEST') ||
         targetName.includes('CONTACT') ||
@@ -135,8 +160,19 @@ const SplineScene = memo(({ sceneUrl, enableInteraction = true }: SplineScenePro
             onError={(error: any) => {
               console.error('❌ Spline error:', error);
             }}
-            // ✅ FIX: THÊM 2 DÒNG NÀY!
-            onSplineMouseDown={onSplineClick}
+            // ✅ Try multiple event handlers
+            onMouseDown={(e: any) => {
+              console.log('🔵 onMouseDown triggered!', e);
+              onSplineClick(e);
+            }}
+            onSplineMouseDown={(e: any) => {
+              console.log('🟢 onSplineMouseDown triggered!', e);
+              onSplineClick(e);
+            }}
+            onClick={(e: any) => {
+              console.log('🟡 onClick triggered!', e);
+              onSplineClick(e);
+            }}
             onSplineMouseHover={onSplineHover}
         />
       </div>

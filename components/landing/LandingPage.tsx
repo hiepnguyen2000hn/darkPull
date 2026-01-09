@@ -9,7 +9,6 @@ import KeyFeatures from "./KeyFeatures";
 import RealWorldApplications from "./RealWorldApplications";
 import JoinCommunity from "./JoinCommunity";
 import Footer from "./Footer";
-import SplineEventLogger from "../SplineEventLogger";
 
 export default function LandingPage() {
   return (
@@ -38,9 +37,6 @@ export default function LandingPage() {
         <JoinCommunity />
         <Footer />
       </div>
-
-      {/* ✅ Spline Event Logger (for debugging) */}
-      <SplineEventLogger />
     </div>
   );
 }
