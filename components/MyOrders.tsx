@@ -15,14 +15,18 @@ import toast from 'react-hot-toast';
 import Header from './Header';
 import { useTokens } from '@/hooks/useTokens';
 import DateTimeRangePicker from './DateTimeRangePicker';
-// Order status mapping (dark theme colors)
+
+// Order status mapping (from API string to UI display)
 const ORDER_STATUS = {
-  0: { label: 'Open', color: 'text-green-500' },
-  1: { label: 'Partial', color: 'text-yellow-500' },
-  2: { label: 'Filled', color: 'text-blue-500' },
-  3: { label: 'Matched', color: 'text-purple-500' },
-  4: { label: 'Cancelled', color: 'text-gray-500' },
-  5: { label: 'Created', color: 'text-cyan-500' },
+  'Created': { label: 'Created', color: 'text-cyan-500', dotColor: 'text-cyan-500 fill-cyan-500' },
+  'Pending': { label: 'Pending', color: 'text-orange-500', dotColor: 'text-orange-500 fill-orange-500' },
+  'Matching': { label: 'Matching', color: 'text-orange-500', dotColor: 'text-orange-500 fill-orange-500' },
+  'Filled': { label: 'Filled', color: 'text-blue-500', dotColor: 'text-blue-500 fill-blue-500' },
+  'Matched': { label: 'Matched', color: 'text-purple-500', dotColor: 'text-purple-500 fill-purple-500' },
+  'Cancelled': { label: 'Cancelled', color: 'text-gray-500', dotColor: 'text-gray-500 fill-gray-500' },
+  'Open': { label: 'Open', color: 'text-green-500', dotColor: 'text-green-500 fill-green-500' },
+  'Partial': { label: 'Partial', color: 'text-orange-400', dotColor: 'text-orange-400 fill-orange-400' },
+  'SettlingMatch': { label: 'Settling', color: 'text-yellow-500', dotColor: 'text-yellow-500 fill-yellow-500' },
 } as const;
 
 // Order filter params interface
@@ -81,7 +85,7 @@ const MyOrders = () => {
     }));
   };
 
-  // Handle date changes - Chỉ gửi khi CẢ HAI from_date và to_date đều có
+  // Handle date changes - Only send when BOTH from_date and to_date are present
   useEffect(() => {
     if (startDate && endDate) {
       // Format to ISO 8601 date string (YYYY-MM-DD)
@@ -316,26 +320,46 @@ const MyOrders = () => {
                 </button>
 
                 {showFilters.status && (
-                  <div className="absolute top-full mt-1 left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[140px]">
+                  <div className="absolute top-full mt-1 left-0 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 min-w-[160px]">
                     <button
                       onClick={() => {
                         setFilter({ status: ['Created'] });
                         setShowFilters({ ...showFilters, status: false });
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-green-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                      className="w-full text-left px-4 py-2 text-sm text-cyan-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
                     >
-                      <Circle className="w-3 h-3 text-green-500 fill-green-500" />
-                      <span>Open</span>
+                      <Circle className="w-3 h-3 text-cyan-500 fill-cyan-500" />
+                      <span>Created</span>
                     </button>
                     <button
                       onClick={() => {
-                        setFilter({ status: ['Matching'] });
+                        setFilter({ status: ['Pending'] });
+                        setShowFilters({ ...showFilters, status: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-orange-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                    >
+                      <Circle className="w-3 h-3 text-orange-500 fill-orange-500" />
+                      <span>Pending</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFilter({ status: ['SettlingMatch'] });
                         setShowFilters({ ...showFilters, status: false });
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-yellow-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
                     >
                       <Circle className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                      <span>Pending</span>
+                      <span>Settling</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFilter({ status: ['Filled'] });
+                        setShowFilters({ ...showFilters, status: false });
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-blue-500 hover:bg-gray-800 transition-colors flex items-center space-x-2"
+                    >
+                      <Circle className="w-3 h-3 text-blue-500 fill-blue-500" />
+                      <span>Filled</span>
                     </button>
                     <button
                       onClick={() => {
@@ -523,9 +547,19 @@ const MyOrders = () => {
                   </tr>
                 ) : (
                   orders.map((order, index) => {
-                    const assetSymbol = getSymbol(order.asset);
+                    // Get symbol from tokens array (from useTokens hook)
+                    const tokenInfo = tokens.find(t => t.index === order.asset);
+                    const assetSymbol = tokenInfo?.symbol || getSymbol(order.asset);
                     const isBuy = order.side === 0;
-                    const status = ORDER_STATUS[order.status as keyof typeof ORDER_STATUS] || ORDER_STATUS[0];
+
+                    // Get status from API string, fallback to 'Created' if not found
+                    const statusFromAPI = order.status;
+                    const statusConfig = ORDER_STATUS[statusFromAPI as keyof typeof ORDER_STATUS] || {
+                      label: statusFromAPI || 'Unknown',
+                      color: 'text-gray-400',
+                      dotColor: 'text-gray-400 fill-gray-400'
+                    };
+
                     const orderTime = new Date(order.time).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -534,8 +568,6 @@ const MyOrders = () => {
                       minute: '2-digit',
                       second: '2-digit',
                     });
-                    const isCancelling = cancellingOrders.has(index);
-
                     return (
                       <tr
                         key={index}
@@ -552,8 +584,8 @@ const MyOrders = () => {
                           />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`text-sm font-medium ${status.color}`}>
-                            {status.label}
+                          <span className={`text-sm font-medium ${statusConfig.color}`}>
+                            {statusConfig.label}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -570,7 +602,7 @@ const MyOrders = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                          ${order.order_value.toFixed(2)}
+                          ${order.order_value?.toFixed(2) || '0.00'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
                           {order.price || '-'}
