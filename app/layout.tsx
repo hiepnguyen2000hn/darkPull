@@ -18,8 +18,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trading Dashboard",
-  description: "Web3 Trading Dashboard with AppKit",
+  title: {
+    default: "Zenigma",
+    template: "%s | Zenigma",
+  },
+  description: "Zenigma - Privacy-First Dark Pool Trading",
 };
 
 export default async function RootLayout({
