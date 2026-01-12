@@ -350,12 +350,12 @@ const MyAssets = () => {
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
                                 <Tooltip.Content
-                                  className="bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg text-xs text-white shadow-xl z-50"
+                                  className="bg-white border border-gray-200 px-3 py-2 rounded-lg text-xs text-black shadow-xl z-50"
                                   side="right"
                                   sideOffset={5}
                                 >
-                                  {walletBalanceNum.toFixed(8)}
-                                  <Tooltip.Arrow className="fill-gray-800" />
+                                  {walletBalanceNum.toFixed(4)}
+                                  <Tooltip.Arrow className="fill-white" />
                                 </Tooltip.Content>
                               </Tooltip.Portal>
                             </Tooltip.Root>
@@ -369,12 +369,12 @@ const MyAssets = () => {
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
                                 <Tooltip.Content
-                                  className="bg-gray-800 border border-gray-700 px-3 py-2 rounded-lg text-xs text-white shadow-xl z-50"
+                                  className="bg-white border border-gray-200 px-3 py-2 rounded-lg text-xs text-black shadow-xl z-50"
                                   side="right"
                                   sideOffset={5}
                                 >
-                                  {zenigmaBalance.toFixed(8)}
-                                  <Tooltip.Arrow className="fill-gray-800" />
+                                  {zenigmaBalance.toFixed(4)}
+                                  <Tooltip.Arrow className="fill-white" />
                                 </Tooltip.Content>
                               </Tooltip.Portal>
                             </Tooltip.Root>
