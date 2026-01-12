@@ -55,7 +55,7 @@ interface TransferFilters {
 const MyAssets = () => {
   const { authenticated, user } = usePrivy();
   const { getSymbol } = useTokenMapping();
-  const { tokens } = useTokens();
+  const { tokens, isLoading: isLoadingTokens, isLoaded: isTokensLoaded } = useTokens();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -120,7 +120,7 @@ const MyAssets = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle date changes - Chỉ gửi khi CẢ HAI from_date và to_date đều có
+  // Handle date changes - Only send when BOTH from_date and to_date are present
   useEffect(() => {
     if (startDate && endDate) {
       // Format to ISO 8601 date string (YYYY-MM-DD)
@@ -165,31 +165,40 @@ const MyAssets = () => {
       return;
     }
 
+    // Wait for tokens to be loaded from useTokens hook
+    if (!isTokensLoaded || tokens.length === 0) {
+      console.log('⏳ Waiting for tokens to load...');
+      return;
+    }
+
     const fetchAssets = async () => {
       setLoading(true);
       setError(null);
       try {
-        const walletId = extractPrivyWalletId(user.id);
-        const profile = await getUserProfile(walletId);
+        // Step 1: Use tokens from useTokens hook (already cached)
+        console.log('✅ Using tokens from hook:', tokens.length, 'tokens');
 
-        // Calculate assets from available_balances
-        const assetsList: Asset[] = [];
-        if (profile.available_balances) {
-          profile.available_balances.forEach((balance: string, index: number) => {
-            const balanceNum = parseFloat(balance);
-            if (balanceNum > 0) {
-              assetsList.push({
-                tokenIndex: index,
-                balance: balance,
-                value: (balanceNum * 1).toFixed(2), // Mock value calculation
-              });
-            }
-          });
-        }
+        // Step 2: Fetch user profile
+        const walletId = extractPrivyWalletId(user.id);
+        console.log('🔍 Fetching user profile for wallet:', walletId);
+        const profile = await getUserProfile(walletId);
+        console.log('✅ Profile loaded:', profile);
+
+        // Step 3: Show ALL tokens from API, with balance from profile or 0 if not available
+        const assetsList: Asset[] = tokens.map(token => {
+          // Get balance from profile by token index, default to '0' if not found
+          const balance = profile.available_balances?.[token.index] || '0';
+          const balanceNum = parseFloat(balance);
+          return {
+            tokenIndex: token.index,
+            balance: balance,
+            value: (balanceNum * 1).toFixed(2), // Mock value calculation
+          };
+        });
 
         setAssets(assetsList);
 
-        // ✅ Fetch transfer history from API
+        // Step 4: Fetch transfer history from API
         console.log('🔍 Fetching transfer history for wallet:', walletId);
         const transferResponse = await getTransferHistory(walletId, {
           page: 1,
@@ -206,7 +215,7 @@ const MyAssets = () => {
     };
 
     fetchAssets();
-  }, [authenticated, user?.id]);
+  }, [authenticated, user?.id, isTokensLoaded, tokens]);
 
   // Fetch transfer history with filters
   useEffect(() => {
@@ -277,7 +286,7 @@ const MyAssets = () => {
                       Sign in to view your assets.
                     </td>
                   </tr>
-                ) : loading ? (
+                ) : loading || isLoadingTokens ? (
                   <tr>
                     <td colSpan={3} className="px-6 py-20 text-center text-gray-400">
                       Loading assets...
@@ -297,7 +306,9 @@ const MyAssets = () => {
                   </tr>
                 ) : (
                   assets.map((asset, index) => {
-                    const symbol = getSymbol(asset.tokenIndex);
+                    // Get symbol from tokens array (from useTokens hook)
+                    const tokenInfo = tokens.find(t => t.index === asset.tokenIndex);
+                    const symbol = tokenInfo?.symbol || getSymbol(asset.tokenIndex);
                     return (
                       <tr key={index} className="hover:bg-gray-900/50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -525,8 +536,9 @@ const MyAssets = () => {
                   </tr>
                 ) : (
                   transfers.map((transfer, index) => {
-                    // ✅ Map API response to UI display
-                    const symbol = getSymbol(transfer.token);
+                    // Get symbol from tokens array (from useTokens hook)
+                    const tokenInfo = tokens.find(t => t.index === transfer.token);
+                    const symbol = tokenInfo?.symbol || getSymbol(transfer.token);
                     const status = TRANSFER_STATUS[transfer.status as keyof typeof TRANSFER_STATUS] || TRANSFER_STATUS.queued;
                     const direction = TRANSFER_DIRECTION[transfer.direction as keyof typeof TRANSFER_DIRECTION] || TRANSFER_DIRECTION.DEPOSIT;
 

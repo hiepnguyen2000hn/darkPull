@@ -21,7 +21,7 @@ import toast from 'react-hot-toast';
 interface WithdrawModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onWithdrawSuccess?: () => void; // Callback sau khi withdraw thành công
+    onWithdrawSuccess?: () => void; // Callback after successful withdrawal
 }
 
 const NETWORKS = [

@@ -59,7 +59,7 @@ const OrderPanel = () => {
     const { calculateNewState, cancelOrder } = useProof();
     const { generateWalletUpdateProofClient } = useWalletUpdateProof();
 
-    // ✅ Filter state với default status=["Created", "Pending", "SettlingMatch"], limit=4
+    // Filter state with default status=["Created", "Pending", "SettlingMatch"], limit=4
     const [filters, setFiltersState] = useState<OrderFilters>({
         status: ['Created', 'Pending', 'SettlingMatch'],
         page: 1,
@@ -245,7 +245,7 @@ const OrderPanel = () => {
         fetchOrders();
     }, [authenticated, user?.id, filters]);
 
-    // ✅ Auto refetch mỗi 5s với filter hiện tại
+    // Auto refetch every 5 seconds with current filters
     useEffect(() => {
         if (!authenticated || !user?.id) {
             return;
@@ -261,9 +261,9 @@ const OrderPanel = () => {
             } catch (err) {
                 console.error('Auto-refetch failed:', err);
             }
-        }, 5000); // Refetch mỗi 5s
+        }, 5000); // Refetch every 5 seconds
 
-        // Cleanup interval khi unmount hoặc dependencies thay đổi
+        // Cleanup interval on unmount or when dependencies change
         return () => clearInterval(intervalId);
     }, [authenticated, user?.id, filters]);
 
@@ -484,7 +484,7 @@ const OrderPanel = () => {
 
                             const isBuy = order.side === 0;
 
-                            // ✅ Lấy status từ API, có fallback mapping nếu cần
+                            // Get status from API with fallback mapping if needed
                             const statusFromAPI = order.status;
                             const statusConfig = ORDER_STATUS[statusFromAPI as keyof typeof ORDER_STATUS];
 
@@ -555,9 +555,9 @@ const OrderPanel = () => {
                                         {orderTime}
                                     </td>
 
-                                    {/* Action - Cancel Button (Only show for Created status) */}
+                                    {/* Action - Cancel Button (Show for Created, Pending, SettlingMatch status) */}
                                     <td className="px-3 py-3 text-center">
-                                        {order.status === 'Created' && (
+                                        {['Created', 'Pending', 'SettlingMatch'].includes(order.status) && (
                                             <button
                                                 onClick={() => handleCancelOrder(order.order_index)}
                                                 disabled={cancellingOrderIndex === order.order_index}

@@ -58,7 +58,7 @@ const MyOrders = () => {
 
   // Filter state
   const [filters, setFiltersState] = useState<OrderFilters>({
-    status: ['Created'],
+    status: [],
     page: 1,
     limit: 20,
   });

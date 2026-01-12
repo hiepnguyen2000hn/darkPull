@@ -27,7 +27,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
     const { wallets } = useWallets();
     const orderInput = useAtomValue(orderInputAtom);
     const pair = useAtomValue(tradingPairAtom);
-    const tokens = useAtomValue(tokensAtom); // ✅ Lấy tokens từ store
+    const tokens = useAtomValue(tokensAtom); // Get tokens from store
     const toggleSide = useSetAtom(toggleOrderSideAtom);
     const updateAmount = useSetAtom(updateOrderAmountAtom);
     const updatePrice = useSetAtom(updateLimitPriceAtom);
@@ -38,7 +38,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
     const { profile, fetchProfile } = useUserProfile();
 
     /**
-     * ✅ Helper: Tìm token index theo symbol từ tokens store (thay vì hardcode)
+     * Helper: Find token index by symbol from tokens store (instead of hardcoding)
      */
     const getTokenIndex = (symbol: string): number => {
         const token = tokens.find(t => t.symbol.toLowerCase() === symbol.toLowerCase());
@@ -83,7 +83,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
         return balance || '0';
     };
 
-    // ✅ Callback xử lý buy/sell order (tương tự hdlUpdateWallet từ Header.tsx)
+    // Callback to handle buy/sell order (similar to hdlUpdateWallet in Header.tsx)
     const handleTradeOrder = async () => {
         try {
             console.log('🚀 Step 1: Creating order...');
@@ -225,6 +225,10 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
                 newState,
                 operations
             });
+            if(proofData.publicInputs) {
+                toast.error(`Something went wrong"`);
+                return
+            }
 
             console.log('✅ Proof generated:', proofData);
 
@@ -253,7 +257,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
 
         } catch (error) {
             console.error('❌ Error creating order:', error);
-            toast.error(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            toast.error(`Something went wrong"`);
         }
     };
 

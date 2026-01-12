@@ -355,7 +355,7 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
                 } else {
                     console.error('❌ Verification failed:', verifyResult.error);
                     toast.error(`Verification failed: ${verifyResult.error}`);
-                    // ✅ Verification failed → ẩn loading, giữ modal
+                    // Verification failed - hide loading, keep modal open
                     setIsProcessing(false);
                     setProcessingStep('');
                     return;
@@ -603,7 +603,7 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
         } catch (error) {
             console.error('❌ Error in deposit process:', error);
             toast.error(error instanceof Error ? error.message : 'Unknown error occurred');
-            // ✅ Error → Ẩn loading overlay, giữ modal để user thử lại
+            // Error - hide loading overlay, keep modal open for user to retry
             setIsProcessing(false);
             setProcessingStep('');
         }
