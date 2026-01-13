@@ -12,7 +12,7 @@ import { tokensAtom } from '@/store/tokens';
 import { useState, useMemo } from 'react';
 import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
 import { type OrderAction, type WalletState } from '@/hooks/useProof';
-import { signMessageWithSkRoot } from '@/lib/ethers-signer';
+import {getAllKeys, signMessageWithSkRoot} from '@/lib/ethers-signer';
 import { extractPrivyWalletId } from '@/lib/wallet-utils';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import toast from 'react-hot-toast';
@@ -35,9 +35,20 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
     const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingStep, setProcessingStep] = useState('');
-    const { verifyProof, submitOrder, calculateNewState } = useProof();
+    const { verifyProof, submitOrder, calculateNewState, initWalletClientSide, isInitializing, initStep } = useProof();
     const { generateWalletUpdateProofClient } = useWalletUpdateProof();
     const { profile, fetchProfile } = useUserProfile();
+    const keys = getAllKeys()
+    /**
+     * Handle wallet initialization and refresh profile after
+     */
+    const handleInitWallet = async () => {
+            const success = await initWalletClientSide(profile.is_initialized);
+            if (success) {
+                const walletId = extractPrivyWalletId(user.id);
+                await fetchProfile(walletId);
+            }
+    };
 
     /**
      * Helper: Find token index by symbol from tokens store (instead of hardcoding)
@@ -339,11 +350,13 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
 
     return (
         <>
-            {/* ✅ Fullscreen Loading Overlay - shows when processing order */}
-            {isProcessing && (
+            {/* ✅ Fullscreen Loading Overlay - shows when processing order or initializing wallet */}
+            {(isProcessing || isInitializing) && (
                 <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/90 backdrop-blur-md">
                     <div className="w-20 h-20 border-4 border-teal-500/30 border-t-teal-500 rounded-full animate-spin"></div>
-                    <div className="text-white font-medium text-xl mt-6">{processingStep}</div>
+                    <div className="text-white font-medium text-xl mt-6">
+                        {isInitializing ? initStep : processingStep}
+                    </div>
                     <div className="text-gray-400 text-sm mt-2">Please wait, do not close this window...</div>
                 </div>
             )}
@@ -374,13 +387,15 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
                             </span>
                         </div>
 
-                        {/* Column 3: Deposit Button */}
-                        <button
-                            onClick={() => setIsDepositModalOpen(true)}
-                            className="px-4 py-2 bg-black border border-white text-white rounded-lg font-medium text-sm hover:bg-gray-900 transition-colors"
-                        >
-                            Deposit
-                        </button>
+                        {/* Column 3: Deposit Button - only show when wallet is initialized */}
+                        {profile?.is_initialized && (
+                            <button
+                                onClick={() => setIsDepositModalOpen(true)}
+                                className="px-4 py-2 bg-black border border-white text-white rounded-lg font-medium text-sm hover:bg-gray-900 transition-colors"
+                            >
+                                Deposit
+                            </button>
+                        )}
                     </div>
 
                 <div className="flex items-center space-x-2 mb-6">
@@ -453,10 +468,18 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
                         </div>
                     </div>
 
-                    {authenticated ? (
-                        <TradingActionButton className="w-full py-4" onClick={handleTradeOrder} />
-                    ) : (
+                    {!authenticated ? (
                         <ConnectButton className="w-full py-4" />
+                    ) : !profile?.is_initialized || !keys.pk_root ? (
+                        <button
+                            onClick={handleInitWallet}
+                            disabled={isInitializing}
+                            className="w-full py-4 px-6 bg-white text-black rounded-lg font-medium hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Sign Wallet
+                        </button>
+                    ) : (
+                        <TradingActionButton className="w-full py-4" onClick={handleTradeOrder} />
                     )}
 
                     <div className="space-y-3 text-sm">

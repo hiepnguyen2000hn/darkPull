@@ -5,6 +5,7 @@ import { Wallet, LogOut } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { auth } from "@/lib/api";
 import { extractPrivyWalletId } from "@/lib/wallet-utils";
+import { clearWalletKeysExternal } from "@/store/walletKeys";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import toast from "react-hot-toast";
 
@@ -229,10 +230,14 @@ const ConnectButton = ({ className = "", onClick, onLoginSuccess, onToggleSideba
                 console.log(`✅ Removed ${key}`);
             });
 
-            // ✅ Step 2: Clear backend tokens
+            // ✅ Step 2: Clear Jotai wallet keys atom (reactive UI update)
+            clearWalletKeysExternal();
+            console.log('✅ Cleared wallet keys atom');
+
+            // ✅ Step 3: Clear backend tokens
             await auth.clearTokens();
 
-            // ✅ Step 3: Call Privy logout
+            // ✅ Step 4: Call Privy logout
             logout();
 
             console.log('✅ Logout completed successfully');

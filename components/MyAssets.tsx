@@ -346,7 +346,7 @@ const MyAssets = () => {
                       const walletBalanceNum = parseFloat(walletBalance);
                       // Check if native token (ETH, WETH, etc.) -> 4 decimals, others -> 2 decimals
                       const isNativeToken = symbol.toUpperCase().includes('ETH');
-                      const walletDecimals = isNativeToken ? 4 : 2;
+                      const walletDecimals = isNativeToken ? 2 : 2;
                       // Format balance zenigma - always 2 decimal places
                       const zenigmaBalance = parseFloat(asset.balance);
                       return (

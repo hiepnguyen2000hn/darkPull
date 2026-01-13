@@ -1,6 +1,7 @@
 'use client';
 
 import { ethers } from 'ethers';
+import { setWalletKeysExternal, clearWalletKeysExternal } from '@/store/walletKeys';
 
 const SECP256K1_ORDER = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141');
 
@@ -11,7 +12,7 @@ const PK_MATCH_KEY = 'pk_match';
 const SK_MATCH_KEY = 'sk_match';
 
 /**
- * Save all wallet keys to localStorage
+ * Save all wallet keys to localStorage AND update Jotai atom (reactive)
  */
 export function saveAllKeys(keys: {
   sk_root: string;
@@ -24,10 +25,14 @@ export function saveAllKeys(keys: {
     return;
   }
 
+  // Save to localStorage (backward compatible)
   localStorage.setItem(SK_ROOT_KEY, keys.sk_root);
   localStorage.setItem(PK_ROOT_KEY, keys.pk_root);
   localStorage.setItem(PK_MATCH_KEY, keys.pk_match);
   localStorage.setItem(SK_MATCH_KEY, keys.sk_match);
+
+  // Update Jotai atom (reactive - triggers re-render in components)
+  setWalletKeysExternal(keys);
 
   console.log('✅ All wallet keys saved to localStorage:');
   console.log('  - sk_root:', keys.sk_root.substring(0, 20) + '...');

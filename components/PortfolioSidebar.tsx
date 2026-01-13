@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, useMemo } from 'react';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTokens } from '@/hooks/useTokens';
+import { useZenigmaAddress } from '@/hooks/useWalletKeys';
 import { getAvailableERC20Tokens } from '@/lib/constants';
 import { TokenIconBySymbol } from './TokenSelector';
 import DepositModal from './DepositModal';
-import { X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { X, ChevronRight, ChevronUp, ChevronDown, Copy, ExternalLink } from 'lucide-react';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import * as Popover from '@radix-ui/react-popover';
 
 /**
  * Portfolio Sidebar Component - Full Height
@@ -24,6 +28,34 @@ interface PortfolioSidebarProps {
 
 const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
     const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+
+    // Get Privy wallet address
+    const { user } = usePrivy();
+    const { wallets } = useWallets();
+    const privyWalletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address || user?.wallet?.address;
+
+    // Get pk_root (Zenigma wallet address) - reactive via Jotai atom
+    const zenigmaAddress = useZenigmaAddress();
+
+    // Helper function to format address
+    const formatAddress = (addr: string) => {
+        if (!addr) return "";
+        return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    };
+
+    // Copy address to clipboard
+    const handleCopyAddress = (address: string) => {
+        navigator.clipboard.writeText(address);
+        toast.success('Address copied!');
+    };
+
+    // View on explorer
+    const handleViewExplorer = (address: string, type: 'zenigma' | 'sepolia') => {
+        const explorerUrl = type === 'sepolia'
+            ? `https://sepolia.etherscan.io/address/${address}`
+            : `https://sepolia.etherscan.io/address/${address}`;
+        window.open(explorerUrl, '_blank');
+    };
 
     // Get user profile data (contains available_balances array)
     const { profile, loading: profileLoading } = useUserProfile();
@@ -86,20 +118,169 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
             >
                 {/* Inner wrapper to maintain width */}
                 <div className="w-[280px] flex flex-col h-full">
-                    {/* Header with Close Button */}
+                    {/* Wallet Cards Section */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: isOpen ? 1 : 0 }}
                         transition={{ delay: isOpen ? 0.1 : 0 }}
-                        className="flex items-center justify-between p-3 border-b border-gray-800"
+                        className="p-3 space-y-2"
+                    >
+                        {/* Zenigma Wallet Card */}
+                        <Popover.Root>
+                            <Popover.Trigger asChild>
+                                <div className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer data-[state=open]:border-gray-600">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center">
+                                            <span className="text-white font-bold text-lg">Z</span>
+                                        </div>
+                                        <div>
+                                            <div className="text-white font-medium text-sm">Zenigma Wallet</div>
+                                            <div className="text-gray-500 text-xs">
+                                                {zenigmaAddress ? formatAddress(zenigmaAddress) : 'Not connected'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col text-gray-500">
+                                        <ChevronUp size={14} />
+                                        <ChevronDown size={14} className="-mt-1" />
+                                    </div>
+                                </div>
+                            </Popover.Trigger>
+                            <Popover.Portal>
+                                <Popover.Content
+                                    side="left"
+                                    sideOffset={8}
+                                    className="w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-[9999] animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+                                >
+                                    {zenigmaAddress && (
+                                        <>
+                                            {/* Full Address */}
+                                            <div className="p-3 border-b border-gray-800">
+                                                <div className="text-gray-400 text-xs font-mono break-all">
+                                                    {zenigmaAddress}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="py-1">
+                                                <Popover.Close asChild>
+                                                    <button
+                                                        onClick={() => handleCopyAddress(zenigmaAddress)}
+                                                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none"
+                                                    >
+                                                        <Copy size={16} className="text-gray-400" />
+                                                        <span className="text-white text-sm">Copy Address</span>
+                                                    </button>
+                                                </Popover.Close>
+                                                <Popover.Close asChild>
+                                                    <button
+                                                        onClick={() => handleViewExplorer(zenigmaAddress, 'zenigma')}
+                                                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none"
+                                                    >
+                                                        <ExternalLink size={16} className="text-gray-400" />
+                                                        <span className="text-white text-sm">View on Explorer</span>
+                                                    </button>
+                                                </Popover.Close>
+                                                <Popover.Close asChild>
+                                                    <button className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none">
+                                                        <X size={16} className="text-gray-400" />
+                                                        <span className="text-white text-sm">Disconnect</span>
+                                                    </button>
+                                                </Popover.Close>
+                                            </div>
+                                        </>
+                                    )}
+                                    <Popover.Arrow className="fill-gray-700" />
+                                </Popover.Content>
+                            </Popover.Portal>
+                        </Popover.Root>
+
+                        {/* Sepolia Wallet Card */}
+                        <Popover.Root>
+                            <Popover.Trigger asChild>
+                                <div className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer data-[state=open]:border-gray-600">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-9 h-9 rounded-lg bg-[#213147] flex items-center justify-center overflow-hidden">
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" fill="#28A0F0"/>
+                                                <path d="M12 2L3 7L12 12L21 7L12 2Z" fill="#96BEDC"/>
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <div className="text-white font-medium text-sm">Sepolia Wallet</div>
+                                            <div className="text-gray-500 text-xs">
+                                                {privyWalletAddress ? formatAddress(privyWalletAddress) : 'Not connected'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col text-gray-500">
+                                        <ChevronUp size={14} />
+                                        <ChevronDown size={14} className="-mt-1" />
+                                    </div>
+                                </div>
+                            </Popover.Trigger>
+                            <Popover.Portal>
+                                <Popover.Content
+                                    side="left"
+                                    sideOffset={8}
+                                    className="w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-[9999] animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95"
+                                >
+                                    {privyWalletAddress && (
+                                        <>
+                                            {/* Full Address */}
+                                            <div className="p-3 border-b border-gray-800">
+                                                <div className="text-gray-400 text-xs font-mono break-all">
+                                                    {privyWalletAddress}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="py-1">
+                                                <Popover.Close asChild>
+                                                    <button
+                                                        onClick={() => handleCopyAddress(privyWalletAddress)}
+                                                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none"
+                                                    >
+                                                        <Copy size={16} className="text-gray-400" />
+                                                        <span className="text-white text-sm">Copy Address</span>
+                                                    </button>
+                                                </Popover.Close>
+                                                <Popover.Close asChild>
+                                                    <button
+                                                        onClick={() => handleViewExplorer(privyWalletAddress, 'sepolia')}
+                                                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none"
+                                                    >
+                                                        <ExternalLink size={16} className="text-gray-400" />
+                                                        <span className="text-white text-sm">View on Explorer</span>
+                                                    </button>
+                                                </Popover.Close>
+                                                <Popover.Close asChild>
+                                                    <button className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none">
+                                                        <X size={16} className="text-gray-400" />
+                                                        <span className="text-white text-sm">Disconnect</span>
+                                                    </button>
+                                                </Popover.Close>
+                                            </div>
+                                        </>
+                                    )}
+                                    <Popover.Arrow className="fill-gray-700" />
+                                </Popover.Content>
+                            </Popover.Portal>
+                        </Popover.Root>
+                    </motion.div>
+
+                    {/* Assets Header */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: isOpen ? 1 : 0 }}
+                        transition={{ delay: isOpen ? 0.15 : 0 }}
+                        className="flex items-center justify-between px-3 py-2"
                     >
                         <h2 className="text-base font-semibold text-white">Assets</h2>
-                        <button
-                            onClick={onClose}
-                            className="p-1.5 hover:bg-gray-800 rounded-lg transition-colors"
-                        >
-                            <X size={18} className="text-gray-400" />
-                        </button>
+                        <div className="flex items-center space-x-1 text-white cursor-pointer hover:text-gray-300 transition-colors">
+                            <span className="text-sm font-medium">${totalPortfolioValue.toFixed(2)}</span>
+                            <ChevronRight size={16} />
+                        </div>
                     </motion.div>
 
                     {/* Token List - No Scroll */}
@@ -107,8 +288,8 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: isOpen ? 1 : 0 }}
-                            transition={{ delay: isOpen ? 0.15 : 0 }}
-                            className="p-3 space-y-1.5"
+                            transition={{ delay: isOpen ? 0.2 : 0 }}
+                            className="px-3 space-y-1.5"
                         >
                             {isLoading ? (
                             // Loading skeleton - Compact
@@ -192,6 +373,28 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                             )}
                         </motion.div>
                     </div>
+
+                    {/* Bridge & Deposit Section */}
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: isOpen ? 1 : 0 }}
+                        transition={{ delay: isOpen ? 0.25 : 0 }}
+                        className="mt-auto p-3 border-t border-gray-800"
+                    >
+                        <div className="text-gray-500 text-xs mb-3">Bridge & Deposit</div>
+                        <button className="w-full flex items-center space-x-3 p-3 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer">
+                            <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center text-gray-500">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </div>
+                            <div className="text-left">
+                                <div className="text-white text-sm font-medium">Connect Solana Wallet</div>
+                                <div className="text-gray-500 text-xs">To bridge & deposit USDC</div>
+                            </div>
+                        </button>
+                    </motion.div>
 
                 </div>
             </motion.aside>

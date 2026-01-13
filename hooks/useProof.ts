@@ -1,6 +1,14 @@
 import { useState } from 'react';
+import { useSignTypedData } from 'wagmi';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { TOTAL_TOKEN, MAX_PENDING_ORDER, API_ENDPOINTS } from '@/lib/constants';
-import apiClient from '@/lib/api';  // ✅ Import apiClient
+import apiClient from '@/lib/api';
+import { useClientProof } from '@/hooks/useClientProof';
+import { useGenerateWalletInit } from '@/hooks/useGenerateWalletInit';
+import { saveAllKeys, signMessageWithSkRoot } from '@/lib/ethers-signer';
+import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { initWalletProof } from '@/lib/services';
+import toast from 'react-hot-toast';
 
 // ============================================
 // TYPE DEFINITIONS FOR calculateNewState
@@ -492,6 +500,15 @@ export async function calculateNewState(
 export function useProof() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [initStep, setInitStep] = useState('');
+
+  // ✅ Hooks for wallet initialization
+  const { user } = usePrivy();
+  const { wallets } = useWallets();
+  const { signTypedDataAsync } = useSignTypedData();
+  const { deriveKeysFromSignature } = useClientProof();
+  const { generateWalletInit } = useGenerateWalletInit();
 
   const verifyProof = async ({
     proof,
@@ -645,13 +662,210 @@ export function useProof() {
     }
   };
 
+  // ============================================
+  // WALLET INITIALIZATION FUNCTION
+  // ============================================
+
+  /**
+   * Generate wallet keys and proof payload
+   * Returns the prepared payload ready for API submission
+   */
+  const generateWalletPayload = async () => {
+    console.log('🚀 [useProof] Starting wallet payload generation...');
+
+    const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+    if (!walletAddress) {
+      throw new Error('Please connect wallet first!');
+    }
+
+    if (!user?.id) {
+      throw new Error('User not authenticated!');
+    }
+
+    const chainId = 11155111; // Sepolia testnet
+
+    // Step 1: Sign EIP-712 message
+    setInitStep('Signing authentication message...');
+    console.log('📝 Step 1: Signing EIP-712 message...');
+
+    const eip712Signature = await signTypedDataAsync({
+      domain: {
+        name: "Zenigma Auth",
+        version: "1",
+        chainId
+      },
+      types: {
+        Auth: [{ name: "message", type: "string" }]
+      },
+      primaryType: 'Auth',
+      message: {
+        message: "Zenigma Authentication"
+      }
+    });
+
+    console.log('✅ Step 1: EIP-712 signed!');
+
+    // Step 2: Derive keys from signature
+    setInitStep('Deriving wallet keys...');
+    console.log('🔑 Step 2: Deriving keys...');
+
+    const keysResult = await deriveKeysFromSignature(eip712Signature, chainId);
+
+    if (!keysResult.success || !keysResult.keys) {
+      throw new Error(keysResult.error || 'Failed to derive keys');
+    }
+
+    const keys = keysResult.keys;
+    console.log('✅ Step 2: Keys derived!');
+
+    // Save keys to localStorage
+    saveAllKeys({
+      sk_root: keys.sk_root,
+      pk_root: keys.pk_root.address,
+      pk_match: keys.pk_match,
+      sk_match: keys.sk_match
+    });
+    console.log('💾 Keys saved to localStorage');
+
+    // Step 3: Generate proof
+    setInitStep('Generating proof (this may take a moment)...');
+    console.log('🔐 Step 3: Generating proof...');
+
+    const proofResult = await generateWalletInit({
+      userSecret: "1234",
+      blinder_seed: keys.blinder_seed,
+      pk_root: keys.pk_root.address,
+      pk_match: keys.pk_match,
+      sk_match: keys.sk_match
+    });
+
+    if (!proofResult.success) {
+      throw new Error(proofResult.error || 'Failed to generate proof');
+    }
+
+    console.log('✅ Step 3: Proof generated!');
+
+    // Step 4: Sign initial commitment
+    setInitStep('Signing commitment...');
+    console.log('📝 Step 4: Signing commitment...');
+
+    const commitmentSignature = await signMessageWithSkRoot(
+      proofResult.publicInputs!.initial_commitment
+    );
+
+    console.log('✅ Step 4: Commitment signed!');
+
+    // Step 5: Prepare final payload
+    const walletId = extractPrivyWalletId(user.id);
+
+    const finalPayload = {
+      proof: proofResult.proof!,
+      wallet_address: walletAddress,
+      signature: commitmentSignature,
+      pk_root: keys.pk_root.address,
+      blinder: keys.blinder_seed,
+      pk_match: keys.pk_match,
+      sk_match: keys.sk_match,
+      publicInputs: {
+        initial_commitment: proofResult.publicInputs!.initial_commitment
+      },
+      wallet_id: walletId,
+      proofTiming: proofResult.timing
+    };
+
+    console.log('✅ Payload prepared successfully!');
+
+    return finalPayload;
+  };
+
+  /**
+   * Main wallet initialization handler
+   * Can be used from any component after login
+   *
+   * @param is_initialized - Whether user wallet is already initialized (from profile)
+   * @returns Promise<boolean> - true if successful
+   *
+   * @example
+   * // In Header.tsx or any component
+   * const { initWalletClientSide } = useProof();
+   *
+   * const handleLoginSuccess = async (is_initialized: boolean) => {
+   *   await initWalletClientSide(is_initialized);
+   * };
+   */
+  const initWalletClientSide = async (is_initialized?: boolean): Promise<boolean> => {
+    try {
+      setIsInitializing(true);
+      setInitStep('Checking existing keys...');
+
+      // Check if keys already exist in localStorage
+      console.log('🔍 [initWalletClientSide] Checking localStorage for existing keys...');
+      const existingPkRoot = localStorage.getItem('pk_root');
+
+      if (existingPkRoot) {
+        console.log('✅ [initWalletClientSide] Keys already exist in localStorage');
+        console.log('  - pk_root:', existingPkRoot.substring(0, 20) + '...');
+        console.log('ℹ️ [initWalletClientSide] Skipping key generation - using existing keys');
+        setIsInitializing(false);
+        setInitStep('');
+        return true;
+      }
+
+      // Generate wallet payload (keys + proof)
+      console.log('🔐 [initWalletClientSide] No existing keys found - starting key generation...');
+      const payload = await generateWalletPayload();
+      console.log('✅ [initWalletClientSide] Keys generated and saved to localStorage');
+
+      // Submit to API if wallet not initialized
+      if (is_initialized === false) {
+        setInitStep('Initializing wallet on blockchain...');
+        console.log('📡 [initWalletClientSide] Wallet not initialized, submitting to API...');
+
+        await initWalletProof({
+          proof: payload.proof,
+          wallet_address: payload.wallet_address,
+          signature: payload.signature,
+          pk_root: payload.pk_root,
+          blinder: payload.blinder,
+          pk_match: payload.pk_match,
+          sk_match: payload.sk_match,
+          publicInputs: payload.publicInputs,
+          wallet_id: payload.wallet_id
+        });
+
+        toast.success('Wallet initialized successfully!');
+      } else {
+        console.log('ℹ️ [initWalletClientSide] Wallet already initialized, skipping API call');
+      }
+
+      setIsInitializing(false);
+      setInitStep('');
+      return true;
+
+    } catch (error) {
+      console.error('❌ [initWalletClientSide] Error:', error);
+      toast.error(error instanceof Error ? error.message : 'Unknown error');
+      setIsInitializing(false);
+      setInitStep('');
+      return false;
+    }
+  };
+
   return {
+    // Proof functions
     verifyProof,
     submitOrder,
     cancelOrder,
-    isVerifying,
-    error,
     calculateNewState,
+
+    // Wallet init function
+    initWalletClientSide,
+
+    // States
+    isVerifying,
+    isInitializing,
+    initStep,
+    error,
   };
 }
 
