@@ -53,7 +53,7 @@ const SplineScene = memo(({ sceneUrl, enableInteraction = true }: SplineScenePro
     switch(targetName) {
       case 'CTA':
         console.log('🚀 CTA clicked! Navigating to Trading Dashboard...');
-        router.push('/TradingDashboard/btc-usdc');
+        router.push('/TradingDashboard/wbnb-usdc');
         break;
 
       case 'ACCESS TERMINAL':
