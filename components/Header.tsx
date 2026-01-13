@@ -23,7 +23,8 @@ import {extractPrivyWalletId} from '@/lib/wallet-utils';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
-
+import { toHex, pad } from 'viem'
+import Image from 'next/image';
 interface HeaderProps {
     onToggleSidebar?: () => void;
 }
@@ -244,6 +245,15 @@ const Header = ({ onToggleSidebar }: HeaderProps = {}) => {
         console.log('Tokens:', response);
     }
 
+    const myTest = async () => {
+        console.log('test function called');
+        const pkRoot  = localStorage.getItem('pk_root');
+        console.log(pkRoot, 'pkRoot from localStorage');
+        const hex = toHex(BigInt(pkRoot))
+        const paddedHex = pad(hex, { size: 32 })
+        console.log(paddedHex, 'paddedHex')
+    }
+
     useEffect(() => {
         fetchTokens()
     }, [])
@@ -253,7 +263,19 @@ const Header = ({ onToggleSidebar }: HeaderProps = {}) => {
         <header className="border-b border-gray-800 bg-black">
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center space-x-8">
-                    <div className="text-2xl font-bold">R</div>
+                    <div className="relative group cursor-pointer">
+                        <div className="absolute -inset-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full blur-lg opacity-30 group-hover:opacity-60 transition-opacity duration-500 animate-pulse"></div>
+                        <div className="relative">
+                            <Image
+                                src="/logoZ.jpg"
+                                alt="Logo"
+                                width={48}
+                                height={48}
+                                className="rounded-full shadow-lg shadow-blue-500/50 group-hover:shadow-purple-500/70 transition-all duration-300 group-hover:scale-110"
+                                priority
+                            />
+                        </div>
+                    </div>
 
                     <nav className="flex items-center space-x-6">
                         <Link
@@ -302,6 +324,9 @@ const Header = ({ onToggleSidebar }: HeaderProps = {}) => {
                         onLoginSuccess={hdlInitWalletClientSide}
                         onToggleSidebar={onToggleSidebar}
                     />
+                    {/*<button onClick={myTest}>*/}
+                    {/*    test*/}
+                    {/*</button>*/}
                 </div>
             </div>
 

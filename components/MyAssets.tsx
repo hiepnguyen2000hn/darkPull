@@ -61,7 +61,10 @@ const MyAssets = () => {
   const { tokens, isLoading: isLoadingTokens, isLoaded: isTokensLoaded } = useTokens();
   const { profile, loading: profileLoading, fetchProfile } = useUserProfile();
   // Pass tokens from API to read wallet balances for all tokens
+  //TODO: apply multi-chain support
+  console.log(tokens, 'tokens in MyAssets');
   const { balances: walletBalances, isLoading: isLoadingWalletBalances } = useAllTokenBalances(tokens);
+
   const [assets, setAssets] = useState<Asset[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(false);
