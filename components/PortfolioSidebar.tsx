@@ -7,7 +7,7 @@ import { useTokens } from '@/hooks/useTokens';
 import { useZenigmaAddress } from '@/hooks/useWalletKeys';
 import { clearWalletKeysExternal } from '@/store/walletKeys';
 import { useProof } from '@/hooks/useProof';
-import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { getAvailableERC20Tokens } from '@/lib/constants';
 import { TokenIconBySymbol } from './TokenSelector';
 import DepositModal from './DepositModal';
@@ -36,7 +36,7 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
     // Get Privy wallet address and logout
     const { user, logout } = usePrivy();
     const { wallets } = useWallets();
-    const privyWalletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address || user?.wallet?.address;
+    const privyWalletAddress = getWalletAddressByConnectorType(wallets, 'embedded') || user?.wallet?.address;
 
     // Get pk_root (Zenigma wallet address) - reactive via Jotai atom
     const zenigmaAddress = useZenigmaAddress();

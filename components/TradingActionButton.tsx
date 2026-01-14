@@ -3,6 +3,7 @@
 import { useAtomValue } from "jotai";
 import { tradingPairAtom, orderInputAtom, balancesAtom } from "@/store/trading";
 import { usePrivy, useFundWallet, useWallets } from "@privy-io/react-auth";
+import { getWalletAddressByConnectorType } from "@/lib/wallet-utils";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -23,8 +24,8 @@ const TradingActionButton = ({ className = "", onClick }: TradingActionButtonPro
 
         setIsProcessing(true);
         try {
-            // Get embedded wallet address (giống Header.tsx:111)
-            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            // Get embedded wallet address
+            const walletAddress = getWalletAddressByConnectorType(wallets, 'embedded');
             console.log('test11111111111111',walletAddress)
             if (!walletAddress) {
                 console.error("No embedded wallet address found");

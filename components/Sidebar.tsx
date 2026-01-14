@@ -13,7 +13,7 @@ import { useState, useMemo } from 'react';
 import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
 import { type OrderAction, type WalletState } from '@/hooks/useProof';
 import {getAllKeys, signMessageWithSkRoot} from '@/lib/ethers-signer';
-import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import toast from 'react-hot-toast';
 
@@ -117,7 +117,7 @@ const Sidebar = ({ selectedCrypto, onCryptoChange }: SidebarProps) => {
             console.log('🚀 Step 1: Creating order...');
 
             // Get wallet address
-            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            const walletAddress = getWalletAddressByConnectorType(wallets);
             if (!walletAddress) {
                 toast.error('Please connect wallet first!');
                 setIsProcessing(false);

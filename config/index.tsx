@@ -1,4 +1,4 @@
-import { http, createConfig } from "wagmi";
+import { http, createConfig, webSocket } from "wagmi";
 import { mainnet, arbitrum, polygon, base, optimism, sepolia } from "wagmi/chains";
 
 // Get Privy App ID from environment variables
@@ -47,7 +47,7 @@ export const config = createConfig({
   chains: [sepolia, mainnet, arbitrum, polygon, base, optimism],
   transports: {
     [mainnet.id]: http(),
-    [sepolia.id]: http(),
+    [sepolia.id]: webSocket('wss://api.zan.top/node/ws/v1/eth/sepolia/84df79aab8774f70a2596d392c366f19'),
     [arbitrum.id]: http(),
     [polygon.id]: http(),
     [base.id]: http(),

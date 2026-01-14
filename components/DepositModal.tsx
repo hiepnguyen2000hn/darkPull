@@ -14,7 +14,7 @@ import { useWallets } from '@privy-io/react-auth';
 import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
 import { usePermit2Signature } from '@/hooks/usePermit2Signature';
 import { type TransferAction, type WalletState } from '@/hooks/useProof';
-import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { signMessageWithSkRoot } from '@/lib/ethers-signer';
 import { parseUnits, parseEther } from 'viem';
 import toast from 'react-hot-toast';
@@ -90,11 +90,11 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
         address: wethAddress,
         abi: WETH_ABI,
         functionName: 'allowance',
-        args: wallets.find(w => w.connectorType === 'embedded')?.address && PERMIT2_ADDRESS
-            ? [wallets.find(w => w.connectorType === 'embedded')?.address as `0x${string}`, PERMIT2_ADDRESS]
+        args: getWalletAddressByConnectorType(wallets, 'embedded') && PERMIT2_ADDRESS
+            ? [getWalletAddressByConnectorType(wallets, 'embedded') as `0x${string}`, PERMIT2_ADDRESS]
             : undefined,
         query: {
-            enabled: !!(wallets.find(w => w.connectorType === 'embedded')?.address && PERMIT2_ADDRESS),
+            enabled: !!(getWalletAddressByConnectorType(wallets, 'embedded') && PERMIT2_ADDRESS),
         }
     });
 
@@ -169,7 +169,7 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
             }
 
             // Get wallet address
-            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            const walletAddress = getWalletAddressByConnectorType(wallets, 'embedded');
             if (!walletAddress) {
                 toast.error('Please connect wallet first!');
                 setIsProcessing(false);

@@ -2,6 +2,7 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { WagmiProvider } from "@privy-io/wagmi";
+import { addRpcUrlOverrideToChain } from '@privy-io/chains';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { privyAppId, config } from "@/config";
 import React, { type ReactNode } from "react";
@@ -12,8 +13,13 @@ import { sepolia } from "wagmi/chains";
 const queryClient = new QueryClient();
 
 if (!privyAppId) {
-  throw new Error("Privy App ID is not defined");
+    throw new Error("Privy App ID is not defined");
 }
+
+const customeSepoliaRpc = addRpcUrlOverrideToChain(
+    sepolia,
+    'https://api.zan.top/node/v1/eth/sepolia/84df79aab8774f70a2596d392c366f19',
+);
 
 function ContextProvider({
   children,
@@ -33,6 +39,7 @@ function ContextProvider({
         embeddedWallets: {
           createOnLogin: "users-without-wallets",
         },
+        supportedChains: [customeSepoliaRpc],
         defaultChain: sepolia,
       }}
     >

@@ -6,7 +6,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { TokenIconBySymbol } from './TokenSelector';
 import { useTokenMapping } from '@/hooks/useTokenMapping';
 import { getOrderList, getUserProfile, type Order } from '@/lib/services';
-import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
 import { type OrderAction, type WalletState } from '@/hooks/useProof';
 import { signMessageWithSkRoot } from '@/lib/ethers-signer';
@@ -170,7 +170,7 @@ const MyOrders = () => {
       setCancellingOrders(prev => new Set(prev).add(orderIndex));
       console.log('🚫 Starting cancel order process...', { orderIndex });
 
-      const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+      const walletAddress = getWalletAddressByConnectorType(wallets);
       if (!walletAddress) {
         toast.error('Please connect wallet first!');
         setCancellingOrders(prev => {

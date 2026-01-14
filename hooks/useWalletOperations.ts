@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { createWalletClient, http, parseEther, type Address, type Hash } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet, arbitrum, base, optimism } from 'viem/chains';
+import { getWalletByConnectorType } from '@/lib/wallet-utils';
 
 // Supported chains
 const CHAINS = {
@@ -56,13 +57,13 @@ export function useWalletOperations(): WalletOperationsResult {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get the active embedded wallet
-  const getEmbeddedWallet = () => {
-    const embeddedWallet = wallets.find((wallet) => wallet.walletClientType === 'privy');
-    if (!embeddedWallet) {
+  // Get the active embedded wallet (using centralized helper from wallet-utils)
+  const getActiveWallet = () => {
+    const wallet = getWalletByConnectorType(wallets, 'embedded');
+    if (!wallet) {
       throw new Error('No embedded wallet found. Please connect a wallet first.');
     }
-    return embeddedWallet;
+    return wallet;
   };
 
   // Export private key from Privy wallet
@@ -71,7 +72,7 @@ export function useWalletOperations(): WalletOperationsResult {
       setIsExporting(true);
       setError(null);
 
-      const embeddedWallet = getEmbeddedWallet();
+      const wallet = getActiveWallet();
 
       // exportWallet() will prompt user for confirmation
       // Returns base64-encoded encrypted wallet data
@@ -104,11 +105,11 @@ export function useWalletOperations(): WalletOperationsResult {
       setIsSigning(true);
       setError(null);
 
-      const embeddedWallet = getEmbeddedWallet();
+      const wallet = getActiveWallet();
 
       // Use Privy's built-in signMessage if available
-      if ('signMessage' in embeddedWallet && typeof embeddedWallet.signMessage === 'function') {
-        const signature = await embeddedWallet.signMessage(message);
+      if ('signMessage' in wallet && typeof wallet.signMessage === 'function') {
+        const signature = await wallet.signMessage(message);
         console.log('Message signed successfully');
         return signature;
       }
@@ -145,12 +146,12 @@ export function useWalletOperations(): WalletOperationsResult {
       setIsSending(true);
       setError(null);
 
-      const embeddedWallet = getEmbeddedWallet();
+      const wallet = getActiveWallet();
       const chain = CHAINS[chainId];
 
       // Try to use Privy's built-in sendTransaction if available
-      if ('sendTransaction' in embeddedWallet && typeof embeddedWallet.sendTransaction === 'function') {
-        const hash = await embeddedWallet.sendTransaction({
+      if ('sendTransaction' in wallet && typeof wallet.sendTransaction === 'function') {
+        const hash = await wallet.sendTransaction({
           to,
           value: parseEther(value),
           data,
@@ -200,11 +201,11 @@ export function useWalletOperations(): WalletOperationsResult {
       setIsSigning(true);
       setError(null);
 
-      const embeddedWallet = getEmbeddedWallet();
+      const wallet = getActiveWallet();
 
       // Use Privy's built-in signTypedData if available
-      if ('signTypedData' in embeddedWallet && typeof embeddedWallet.signTypedData === 'function') {
-        const signature = await embeddedWallet.signTypedData(typedData);
+      if ('signTypedData' in wallet && typeof wallet.signTypedData === 'function') {
+        const signature = await wallet.signTypedData(typedData);
         console.log('Typed data signed successfully');
         return signature;
       }

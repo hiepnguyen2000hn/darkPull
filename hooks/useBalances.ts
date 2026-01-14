@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSetAtom } from 'jotai';
 import { useWallets } from '@privy-io/react-auth';
+import { getWalletByConnectorType } from '@/lib/wallet-utils';
 import { useReadContract } from 'wagmi';
 import { formatUnits } from 'viem';
 import { balancesAtom, type TokenBalance } from '@/store/trading';
@@ -72,7 +73,7 @@ export function useBalances() {
   const setBalances = useSetAtom(balancesAtom);
 
   // Get embedded wallet address
-  const embeddedWallet = wallets.find(wallet => wallet.connectorType === 'embedded');
+  const embeddedWallet = getWalletByConnectorType(wallets);
   const userAddress = embeddedWallet?.address as `0x${string}` | undefined;
 
   // Fetch USDC balance (token đầu tiên)

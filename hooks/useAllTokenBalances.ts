@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useWallets } from '@privy-io/react-auth';
+import { getWalletByConnectorType } from '@/lib/wallet-utils';
 import { useReadContracts, useBalance } from 'wagmi';
 import { formatUnits, formatEther } from 'viem';
 import { getAvailableERC20Tokens } from '@/lib/constants';
@@ -34,7 +35,7 @@ export function useAllTokenBalances(apiTokens?: Token[]) {
 
   // Get embedded wallet address
   const userAddress = useMemo(() => {
-    const embeddedWallet = wallets.find(wallet => wallet.connectorType === 'embedded');
+    const embeddedWallet = getWalletByConnectorType(wallets);
     return embeddedWallet?.address as `0x${string}` | undefined;
   }, [wallets]);
 

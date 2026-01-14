@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useWallets } from '@privy-io/react-auth';
+import { getWalletByConnectorType } from '@/lib/wallet-utils';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useConfig, useBalance } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { parseUnits, formatUnits, formatEther } from 'viem';
@@ -49,7 +50,7 @@ export function useUSDC(spenderAddress?: `0x${string}`) {
 
   // Get embedded wallet address
   useEffect(() => {
-    const embeddedWallet = wallets.find(wallet => wallet.connectorType === 'embedded');
+    const embeddedWallet = getWalletByConnectorType(wallets);
     if (embeddedWallet?.address) {
       setUserAddress(embeddedWallet.address as `0x${string}`);
     }

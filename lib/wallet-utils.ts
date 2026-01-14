@@ -296,3 +296,79 @@ export function publicInputsToObject(
 export function extractPrivyWalletId(privyUserId: string): string {
   return privyUserId.replace('did:privy:', '');
 }
+
+/**
+ * Wallet type from Privy useWallets hook
+ */
+export interface PrivyWallet {
+  address: string;
+  connectorType?: string;
+  walletClientType?: string;
+  // ... other privy wallet properties
+  [key: string]: any;
+}
+
+/**
+ * Supported wallet connector types
+ */
+export type WalletConnectorType = 'embedded' | 'injected' | 'wallet_connect' | 'coinbase_wallet' | 'external';
+
+/**
+ * Get wallet by connector type from wallets array
+ *
+ * Centralized function to get wallet by connectorType
+ * Supports: embedded, injected, wallet_connect, coinbase_wallet, external (localStorage)
+ *
+ * @param wallets - Array of wallets from useWallets hook
+ * @param connectorType - Type of connector to find (default: 'embedded')
+ * @returns Wallet matching the connector type or undefined if not found
+ *
+ * @example
+ * const { wallets } = useWallets();
+ * // Get embedded wallet (Privy)
+ * const embeddedWallet = getWalletByConnectorType(wallets, 'embedded');
+ * // Get injected wallet (MetaMask, etc.)
+ * const injectedWallet = getWalletByConnectorType(wallets, 'injected');
+ */
+export function getWalletByConnectorType<T extends PrivyWallet>(
+  wallets: T[],
+  connectorType: WalletConnectorType = 'embedded'
+): T | undefined {
+  return wallets.find(wallet => wallet.connectorType === connectorType);
+}
+
+/**
+ * Get wallet address by connector type from wallets array
+ *
+ * @param wallets - Array of wallets from useWallets hook
+ * @param connectorType - Type of connector to find (default: 'embedded')
+ * @returns Wallet address or undefined if not found
+ *
+ * @example
+ * const { wallets } = useWallets();
+ * const address = getWalletAddressByConnectorType(wallets, 'embedded');
+ */
+export function getWalletAddressByConnectorType<T extends PrivyWallet>(
+  wallets: T[],
+  connectorType: WalletConnectorType = 'embedded'
+): string | undefined {
+  return getWalletByConnectorType(wallets, connectorType)?.address;
+}
+
+/**
+ * Get embedded wallet from wallets array (shorthand)
+ *
+ * @deprecated Use getWalletByConnectorType(wallets, 'embedded') instead
+ */
+export function getEmbeddedWallet<T extends PrivyWallet>(wallets: T[]): T | undefined {
+  return getWalletByConnectorType(wallets, 'embedded');
+}
+
+/**
+ * Get embedded wallet address from wallets array (shorthand)
+ *
+ * @deprecated Use getWalletAddressByConnectorType(wallets, 'embedded') instead
+ */
+export function getEmbeddedWalletAddress<T extends PrivyWallet>(wallets: T[]): string | undefined {
+  return getWalletAddressByConnectorType(wallets, 'embedded');
+}

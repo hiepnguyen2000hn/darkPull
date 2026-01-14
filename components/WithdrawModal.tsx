@@ -12,7 +12,7 @@ import { useWallets } from '@privy-io/react-auth';
 import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
 import { usePermit2Signature } from '@/hooks/usePermit2Signature';
 import { type TransferAction, type WalletState } from '@/hooks/useProof';
-import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { signMessageWithSkRoot } from '@/lib/ethers-signer';
 import { useTokenMapping } from '@/hooks/useTokenMapping';
 import { parseUnits } from 'viem';
@@ -104,7 +104,7 @@ const WithdrawModal = ({ isOpen, onClose, onWithdrawSuccess }: WithdrawModalProp
             }
 
             // Get wallet address
-            const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+            const walletAddress = getWalletAddressByConnectorType(wallets, 'embedded');
             if (!walletAddress) {
                 toast.error('Please connect wallet first!');
                 setIsProcessing(false);

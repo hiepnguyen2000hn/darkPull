@@ -6,7 +6,7 @@ import apiClient from '@/lib/api';
 import { useClientProof } from '@/hooks/useClientProof';
 import { useGenerateWalletInit } from '@/hooks/useGenerateWalletInit';
 import { saveAllKeys, signMessageWithSkRoot } from '@/lib/ethers-signer';
-import { extractPrivyWalletId } from '@/lib/wallet-utils';
+import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { initWalletProof } from '@/lib/services';
 import toast from 'react-hot-toast';
 
@@ -673,7 +673,7 @@ export function useProof() {
   const generateWalletPayload = async () => {
     console.log('🚀 [useProof] Starting wallet payload generation...');
 
-    const walletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address;
+    const walletAddress = getWalletAddressByConnectorType(wallets);
     if (!walletAddress) {
       throw new Error('Please connect wallet first!');
     }
