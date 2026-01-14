@@ -35,6 +35,23 @@ export interface OrderListResponse {
   data: Order[];
 }
 
+export interface MatchingHistory {
+  id: string;
+  order_id: string;
+  side: number;        // 0=buy, 1=sell
+  asset: number;       // Token index
+  price: number;
+  size: number;
+  filled: number;
+  order_value: number;
+  status: string;
+  time: string;        // ISO 8601 timestamp
+}
+
+export interface MatchingHistoryResponse {
+  data: MatchingHistory[];
+}
+
 export interface Transfer {
   status: string;    // Transfer status: "queued" | "completed" | "failed"
   token: number;     // Token index
@@ -366,6 +383,39 @@ export async function getOrderList(
   }
 ): Promise<OrderListResponse> {
   const endpoint = API_ENDPOINTS.ORDER.LIST.replace(':wallet_id', wallet_id);
+  const response = await apiClient.get(endpoint, { params });
+  return response.data;
+}
+
+// ============================================
+// MATCHING HISTORY SERVICES
+// ============================================
+
+/**
+ * Get matching history with pagination and filters
+ *
+ * @param wallet_id Wallet ID (extracted from Privy user ID)
+ * @param params Query parameters
+ * @param params.page Page number (default: 1)
+ * @param params.limit Items per page (default: 20)
+ * @param params.from_date Filter from timestamp (Unix timestamp in milliseconds)
+ * @param params.to_date Filter to timestamp (Unix timestamp in milliseconds)
+ *
+ * @example
+ * const walletId = extractPrivyWalletId(user.id);
+ * const history = await getMatchingHistory(walletId, { page: 1, limit: 20 });
+ * const filtered = await getMatchingHistory(walletId, { from_date: 1704067200000, to_date: 1735689599999 });
+ */
+export async function getMatchingHistory(
+  wallet_id: string,
+  params?: {
+    page?: number;
+    limit?: number;
+    from_date?: number;  // Unix timestamp in milliseconds
+    to_date?: number;    // Unix timestamp in milliseconds
+  }
+): Promise<MatchingHistoryResponse> {
+  const endpoint = API_ENDPOINTS.MATCHING_HISTORY.LIST.replace(':wallet_id', wallet_id);
   const response = await apiClient.get(endpoint, { params });
   return response.data;
 }

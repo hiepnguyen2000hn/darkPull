@@ -15,6 +15,7 @@ import { X, ChevronRight, ChevronUp, ChevronDown, Copy, ExternalLink, Plus } fro
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import * as Popover from '@radix-ui/react-popover';
+import Image from 'next/image';
 
 /**
  * Portfolio Sidebar Component - Full Height
@@ -42,7 +43,7 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
     const zenigmaAddress = useZenigmaAddress();
 
     // Get user profile data (contains available_balances array)
-    const { profile, loading: profileLoading, fetchProfile } = useUserProfile();
+    const { profile, loading: profileLoading, fetchProfile, clearProfile } = useUserProfile();
 
     // Get initWalletClientSide from useProof hook
     const { initWalletClientSide } = useProof();
@@ -141,6 +142,9 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
             // This will trigger UI update via useZenigmaAddress hook
             clearWalletKeysExternal();
 
+            // Step 3: Clear profile to reset balances UI
+            clearProfile();
+
             console.log('✅ [PortfolioSidebar] Zenigma wallet disconnected (localStorage + store cleared)');
             toast.success('Zenigma wallet disconnected');
 
@@ -156,6 +160,10 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
         try {
             console.log('🔌 [PortfolioSidebar] Disconnecting Sepolia wallet (Privy logout)...');
             await logout();
+
+            // Clear profile to reset balances UI
+            clearProfile();
+
             console.log('✅ [PortfolioSidebar] Sepolia wallet disconnected');
             toast.success('Sepolia wallet disconnected');
         } catch (error) {
@@ -241,9 +249,14 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                     }`}
                                 >
                                     <div className="flex items-center space-x-3">
-                                        <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center border border-dashed border-gray-600">
+                                        <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center border border-dashed border-gray-600 overflow-hidden">
                                             {zenigmaAddress ? (
-                                                <span className="text-white font-bold text-lg">Z</span>
+                                                <Image
+                                                    src="/favicon.png"
+                                                    alt="Zenigma"
+                                                    width={13}
+                                                    height={13}
+                                                />
                                             ) : (
                                                 <Plus size={18} className="text-gray-500" />
                                             )}
@@ -333,10 +346,12 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                     <div className="flex items-center space-x-3">
                                         <div className="w-9 h-9 rounded-lg bg-[#213147] flex items-center justify-center overflow-hidden border border-dashed border-gray-600">
                                             {privyWalletAddress ? (
-                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" fill="#28A0F0"/>
-                                                    <path d="M12 2L3 7L12 12L21 7L12 2Z" fill="#96BEDC"/>
-                                                </svg>
+                                                <Image
+                                                    src="/sepolia.png"
+                                                    alt="Zenigma"
+                                                    width={30}
+                                                    height={30}
+                                                />
                                             ) : (
                                                 <Plus size={18} className="text-gray-500" />
                                             )}

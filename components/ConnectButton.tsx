@@ -21,7 +21,7 @@ const ConnectButton = ({ className = "", onClick, onLoginSuccess, onToggleSideba
     const { logout } = useLogout();
 
     // ✅ Use profile hook for state management
-    const { profile, loading: profileLoading, fetchProfile } = useUserProfile();
+    const { profile, loading: profileLoading, fetchProfile, clearProfile } = useUserProfile();
 
     // ✅ Prevent duplicate onComplete calls
     const isProcessingLogin = useRef(false);
@@ -234,12 +234,16 @@ const ConnectButton = ({ className = "", onClick, onLoginSuccess, onToggleSideba
             clearWalletKeysExternal();
             console.log('✅ Cleared wallet keys atom');
 
-            // ✅ Step 3: Clear backend tokens
+            // ✅ Step 3: Clear profile to reset balances UI
+
+            console.log('✅ Cleared profile');
+
+            // ✅ Step 4: Clear backend tokens
             await auth.clearTokens();
 
-            // ✅ Step 4: Call Privy logout
-            logout();
-
+            // ✅ Step 5: Call Privy logout
+            await logout();
+            await clearProfile();
             console.log('✅ Logout completed successfully');
         } catch (error) {
             console.error("Logout error:", error);

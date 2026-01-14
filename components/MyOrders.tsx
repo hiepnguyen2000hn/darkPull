@@ -5,7 +5,7 @@ import { ChevronDown, Calendar, X, Circle } from 'lucide-react';
 import { usePrivy } from '@privy-io/react-auth';
 import { TokenIconBySymbol } from './TokenSelector';
 import { useTokenMapping } from '@/hooks/useTokenMapping';
-import { getOrderList, getUserProfile, type Order } from '@/lib/services';
+import { getOrderList, getMatchingHistory, getUserProfile, type Order, type MatchingHistory } from '@/lib/services';
 import { extractPrivyWalletId, getWalletAddressByConnectorType } from '@/lib/wallet-utils';
 import { useProof, useWalletUpdateProof } from '@/hooks/useProof';
 import { type OrderAction, type WalletState } from '@/hooks/useProof';
@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import Header from './Header';
 import { useTokens } from '@/hooks/useTokens';
 import DateTimeRangePicker from './DateTimeRangePicker';
+import * as Tabs from '@radix-ui/react-tabs';
 
 // Order status mapping (from API string to UI display)
 const ORDER_STATUS = {
@@ -46,10 +47,14 @@ const MyOrders = () => {
   const { getSymbol } = useTokenMapping();
   const { tokens } = useTokens();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [historyOrders, setHistoryOrders] = useState<MatchingHistory[]>([]);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
   const [cancellingOrders, setCancellingOrders] = useState<Set<number>>(new Set());
+  const [activeTab, setActiveTab] = useState('open');
 
   // Dropdown refs
   const statusDropdownRef = useRef<HTMLDivElement>(null);
@@ -60,9 +65,20 @@ const MyOrders = () => {
   const { calculateNewState, cancelOrder } = useProof();
   const { generateWalletUpdateProofClient } = useWalletUpdateProof();
 
-  // Filter state
+  // Filter state for Open Orders
   const [filters, setFiltersState] = useState<OrderFilters>({
-    status: [],
+    status: ['Created', 'Pending', 'SettlingMatch'],
+    page: 1,
+    limit: 20,
+  });
+
+  // Filter state for History Orders (uses timestamps in milliseconds)
+  const [historyFilters, setHistoryFiltersState] = useState<{
+    page?: number;
+    limit?: number;
+    from_date?: number;
+    to_date?: number;
+  }>({
     page: 1,
     limit: 20,
   });
@@ -73,9 +89,13 @@ const MyOrders = () => {
     token: false,
   });
 
-  // Date range state
+  // Date range state for Open Orders
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+
+  // Date range state for History Orders
+  const [historyStartDate, setHistoryStartDate] = useState<Date | null>(null);
+  const [historyEndDate, setHistoryEndDate] = useState<Date | null>(null);
 
   const setFilter = (newFilters: Partial<OrderFilters>) => {
     setFiltersState((prev) => ({
@@ -85,34 +105,66 @@ const MyOrders = () => {
     }));
   };
 
-  // Handle date changes - Only send when BOTH from_date and to_date are present
+  const setHistoryFilter = (newFilters: Partial<{
+    page?: number;
+    limit?: number;
+    from_date?: number;
+    to_date?: number;
+  }>) => {
+    setHistoryFiltersState((prev) => ({
+      ...prev,
+      ...newFilters,
+      page: newFilters.page ?? 1,
+    }));
+  };
+
+  // Handle date changes for Open Orders
   useEffect(() => {
     if (startDate && endDate) {
-      // Format to ISO 8601 date string (YYYY-MM-DD)
       const from_date = startDate.toISOString().split('T')[0];
       const to_date = endDate.toISOString().split('T')[0];
-
       setFilter({ from_date, to_date });
-      console.log('📅 [MyOrders] Date filter applied:', { from_date, to_date });
     } else {
-      // Clear dates if one or both are null
       setFiltersState((prev) => {
         const { from_date, to_date, ...rest } = prev;
         return rest;
       });
-      console.log('📅 [MyOrders] Date filter cleared');
     }
   }, [startDate, endDate]);
 
-  // Clear all filters
+  // Handle date changes for History Orders (convert to Unix timestamp in milliseconds)
+  useEffect(() => {
+    if (historyStartDate && historyEndDate) {
+      const from_date = historyStartDate.getTime();
+      const to_date = historyEndDate.getTime();
+      setHistoryFilter({ from_date, to_date });
+    } else {
+      setHistoryFiltersState((prev) => {
+        const { from_date, to_date, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, [historyStartDate, historyEndDate]);
+
+  // Clear open orders filters
   const clearFilters = () => {
     setFiltersState({
-      status: ['Created'],
+      status: ['Created', 'Pending', 'SettlingMatch'],
       page: 1,
       limit: 20,
     });
     setStartDate(null);
     setEndDate(null);
+  };
+
+  // Clear history filters
+  const clearHistoryFilters = () => {
+    setHistoryFiltersState({
+      page: 1,
+      limit: 20,
+    });
+    setHistoryStartDate(null);
+    setHistoryEndDate(null);
   };
 
   // Close dropdowns when clicking outside
@@ -261,7 +313,7 @@ const MyOrders = () => {
     }
   };
 
-  // Fetch orders
+  // Fetch open orders
   useEffect(() => {
     if (!authenticated || !user?.id) {
       setOrders([]);
@@ -273,12 +325,12 @@ const MyOrders = () => {
       setError(null);
       try {
         const walletId = extractPrivyWalletId(user.id);
-        console.log('🔍 [MyOrders] Fetching orders with filters:', filters);
+        console.log('🔍 [MyOrders] Fetching open orders with filters:', filters);
         const response = await getOrderList(walletId, filters);
-        console.log('✅ [MyOrders] Orders fetched:', response.data?.length || 0, 'orders');
+        console.log('✅ [MyOrders] Open orders fetched:', response.data?.length || 0, 'orders');
         setOrders(response.data || []);
       } catch (err) {
-        console.error('❌ [MyOrders] Failed to fetch orders:', err);
+        console.error('❌ [MyOrders] Failed to fetch open orders:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch orders');
       } finally {
         setLoading(false);
@@ -287,6 +339,33 @@ const MyOrders = () => {
 
     fetchOrders();
   }, [authenticated, user?.id, filters]);
+
+  // Fetch matching history
+  useEffect(() => {
+    if (!authenticated || !user?.id) {
+      setHistoryOrders([]);
+      return;
+    }
+
+    const fetchMatchingHistory = async () => {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const walletId = extractPrivyWalletId(user.id);
+        console.log('🔍 [MyOrders] Fetching matching history with filters:', historyFilters);
+        const response = await getMatchingHistory(walletId, historyFilters);
+        console.log('✅ [MyOrders] Matching history fetched:', response.data?.length || 0, 'records');
+        setHistoryOrders(response.data || []);
+      } catch (err) {
+        console.error('❌ [MyOrders] Failed to fetch matching history:', err);
+        setHistoryError(err instanceof Error ? err.message : 'Failed to fetch history');
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+
+    fetchMatchingHistory();
+  }, [authenticated, user?.id, historyFilters]);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -301,8 +380,41 @@ const MyOrders = () => {
           </p>
         </div>
 
-        {/* Filters */}
-        <div className="bg-gray-900 rounded-lg border border-gray-800 mb-4">
+        {/* Tabs */}
+        <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs.List className="flex border-b border-gray-800 mb-6">
+            <Tabs.Trigger
+              value="open"
+              className={`px-6 py-3 text-sm font-medium transition-colors relative ${
+                activeTab === 'open'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Open Orders
+              {activeTab === 'open' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
+              )}
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="history"
+              className={`px-6 py-3 text-sm font-medium transition-colors relative ${
+                activeTab === 'history'
+                  ? 'text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              History Orders
+              {activeTab === 'history' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
+              )}
+            </Tabs.Trigger>
+          </Tabs.List>
+
+          {/* Open Orders Tab */}
+          <Tabs.Content value="open">
+            {/* Filters */}
+            <div className="bg-gray-900 rounded-lg border border-gray-800 mb-4">
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Status Filter */}
@@ -624,6 +736,164 @@ const MyOrders = () => {
             </table>
           </div>
         </div>
+          </Tabs.Content>
+
+          {/* History Orders Tab */}
+          <Tabs.Content value="history">
+            {/* History Filters - Only Date Range supported by API */}
+            <div className="bg-gray-900 rounded-lg border border-gray-800 mb-4">
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* DateTime Range Picker */}
+                  <DateTimeRangePicker
+                    startDate={historyStartDate}
+                    endDate={historyEndDate}
+                    onStartDateChange={setHistoryStartDate}
+                    onEndDateChange={setHistoryEndDate}
+                    onClear={() => {
+                      setHistoryStartDate(null);
+                      setHistoryEndDate(null);
+                    }}
+                  />
+
+                  {/* Clear button */}
+                  <button
+                    onClick={clearHistoryFilters}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* History Table */}
+            <div className="bg-black border border-gray-800 rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-900 border-b border-gray-800">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Side
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Asset
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Order Value
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Price [USDT]
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Size
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Filled
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Time
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-black divide-y divide-gray-800">
+                    {!authenticated ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-20 text-center text-gray-400">
+                          Sign in to view your order history.
+                        </td>
+                      </tr>
+                    ) : historyLoading ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-20 text-center text-gray-400">
+                          Loading order history...
+                        </td>
+                      </tr>
+                    ) : historyError ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-20 text-center text-red-500">
+                          Error: {historyError}
+                        </td>
+                      </tr>
+                    ) : historyOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-20 text-center text-gray-400">
+                          No order history found.
+                        </td>
+                      </tr>
+                    ) : (
+                      historyOrders.map((order, index) => {
+                        const tokenInfo = tokens.find(t => t.index === order.asset);
+                        const assetSymbol = tokenInfo?.symbol || getSymbol(order.asset);
+                        const isBuy = order.side === 0;
+
+                        const statusFromAPI = order.status;
+                        const statusConfig = ORDER_STATUS[statusFromAPI as keyof typeof ORDER_STATUS] || {
+                          label: statusFromAPI || 'Unknown',
+                          color: 'text-gray-400',
+                          dotColor: 'text-gray-400 fill-gray-400'
+                        };
+
+                        const orderTime = new Date(order.time).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        });
+
+                        return (
+                          <tr
+                            key={index}
+                            className="hover:bg-gray-900/50 transition-colors"
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`text-sm font-medium ${statusConfig.color}`}>
+                                {statusConfig.label}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`text-sm font-medium ${isBuy ? 'text-green-500' : 'text-red-500'}`}>
+                                {isBuy ? 'Buy' : 'Sell'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <TokenIconBySymbol symbol={assetSymbol} size="sm" />
+                                <span className="text-sm font-medium text-white">
+                                  {assetSymbol}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                              ${order.order_value?.toFixed(2) || '0.00'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                              {order.price || '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                              {order.size}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                              {order.filled}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-400">
+                              {orderTime}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Tabs.Content>
+        </Tabs.Root>
       </div>
     </div>
   );

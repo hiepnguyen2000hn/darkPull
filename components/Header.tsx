@@ -46,14 +46,12 @@ const Header = ({ onToggleSidebar }: HeaderProps = {}) => {
             <div className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center space-x-8">
                     <div className="relative group cursor-pointer">
-                        <div className="absolute -inset-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-full blur-lg opacity-30 group-hover:opacity-60 transition-opacity duration-500 animate-pulse"></div>
                         <div className="relative">
                             <Image
-                                src="/logoZ.jpg"
+                                src="/favicon.png"
                                 alt="Logo"
-                                width={48}
-                                height={48}
-                                className="rounded-full shadow-lg shadow-blue-500/50 group-hover:shadow-purple-500/70 transition-all duration-300 group-hover:scale-110"
+                                width={17}
+                                height={17}
                                 priority
                             />
                         </div>

@@ -117,6 +117,11 @@ export const API_ENDPOINTS = {
     LIST: `${API_PREFIX}/order/:wallet_id/list`,
   },
 
+  // Matching History
+  MATCHING_HISTORY: {
+    LIST: `${API_PREFIX}/matching-history/:wallet_id/list`,
+  },
+
   // Balance
   BALANCE: {
     TRANSFER_HISTORY: `${API_PREFIX}/balance/:wallet_id/transfer-history`,
