@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { usePrivy, useWallets, useLogin } from '@privy-io/react-auth';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTokens } from '@/hooks/useTokens';
 import { useZenigmaAddress } from '@/hooks/useWalletKeys';
+import { clearWalletKeysExternal } from '@/store/walletKeys';
+import { useProof } from '@/hooks/useProof';
+import { extractPrivyWalletId } from '@/lib/wallet-utils';
 import { getAvailableERC20Tokens } from '@/lib/constants';
 import { TokenIconBySymbol } from './TokenSelector';
 import DepositModal from './DepositModal';
@@ -28,14 +31,40 @@ interface PortfolioSidebarProps {
 
 const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
     const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+    const [shouldInitZenigma, setShouldInitZenigma] = useState(false);
 
-    // Get Privy wallet address
-    const { user } = usePrivy();
+    // Get Privy wallet address and logout
+    const { user, logout } = usePrivy();
     const { wallets } = useWallets();
     const privyWalletAddress = wallets.find(wallet => wallet.connectorType === 'embedded')?.address || user?.wallet?.address;
 
     // Get pk_root (Zenigma wallet address) - reactive via Jotai atom
     const zenigmaAddress = useZenigmaAddress();
+
+    // Get user profile data (contains available_balances array)
+    const { profile, loading: profileLoading, fetchProfile } = useUserProfile();
+
+    // Get initWalletClientSide from useProof hook
+    const { initWalletClientSide } = useProof();
+
+    // Privy login hook
+    const { login } = useLogin({
+        onComplete: async () => {
+            console.log('✅ [PortfolioSidebar] Privy login completed');
+
+            // If Zenigma wallet init was pending, trigger it now
+            if (shouldInitZenigma) {
+                console.log('🔐 [PortfolioSidebar] Auto-triggering Zenigma init after Privy login...');
+                setShouldInitZenigma(false);
+                await handleZenigmaInit();
+            }
+        },
+        onError: (error) => {
+            console.error('❌ [PortfolioSidebar] Login error:', error);
+            toast.error('Login failed');
+            setShouldInitZenigma(false);
+        },
+    });
 
     // Helper function to format address
     const formatAddress = (addr: string) => {
@@ -57,8 +86,83 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
         window.open(explorerUrl, '_blank');
     };
 
-    // Get user profile data (contains available_balances array)
-    const { profile, loading: profileLoading } = useUserProfile();
+    // Handle actual Zenigma initialization (called after Privy is connected)
+    const handleZenigmaInit = async () => {
+        try {
+            console.log('🔐 [PortfolioSidebar] Initializing Zenigma wallet...');
+            const success = await initWalletClientSide(profile?.is_initialized);
+            if (success && user?.id) {
+                const walletId = extractPrivyWalletId(user.id);
+                await fetchProfile(walletId);
+                toast.success('Zenigma wallet initialized!');
+            }
+        } catch (error) {
+            console.error('❌ [PortfolioSidebar] Zenigma init error:', error);
+            toast.error('Failed to initialize Zenigma wallet');
+        }
+    };
+
+    // Handle Zenigma wallet button click
+    const handleZenigmaConnect = async () => {
+        if (zenigmaAddress) return; // Already connected
+
+        // Step 1: Check if Privy is connected
+        if (!privyWalletAddress) {
+            console.log('🔐 [PortfolioSidebar] Privy not connected, triggering login first...');
+            setShouldInitZenigma(true); // Flag to init Zenigma after login
+            login();
+            return;
+        }
+
+        // Step 2: If Privy already connected, directly init Zenigma
+        await handleZenigmaInit();
+    };
+
+    // Handle Sepolia wallet connection (Privy login)
+    const handleSepoliaConnect = () => {
+        if (privyWalletAddress) return; // Already connected
+
+        console.log('🔐 [PortfolioSidebar] Triggering Privy login...');
+        login();
+    };
+
+    // Handle Zenigma wallet disconnect (clear localStorage keys + store)
+    const handleZenigmaDisconnect = () => {
+        try {
+            console.log('🔌 [PortfolioSidebar] Disconnecting Zenigma wallet...');
+
+            // Step 1: Remove all wallet keys from localStorage
+            localStorage.removeItem('sk_root');
+            localStorage.removeItem('pk_root');
+            localStorage.removeItem('pk_match');
+            localStorage.removeItem('sk_match');
+
+            // Step 2: Clear walletKeysAtom store
+            // This will trigger UI update via useZenigmaAddress hook
+            clearWalletKeysExternal();
+
+            console.log('✅ [PortfolioSidebar] Zenigma wallet disconnected (localStorage + store cleared)');
+            toast.success('Zenigma wallet disconnected');
+
+            // No need to reload - UI updates automatically via Jotai atom!
+        } catch (error) {
+            console.error('❌ [PortfolioSidebar] Error disconnecting Zenigma:', error);
+            toast.error('Failed to disconnect Zenigma wallet');
+        }
+    };
+
+    // Handle Sepolia wallet disconnect (Privy logout)
+    const handleSepoliaDisconnect = async () => {
+        try {
+            console.log('🔌 [PortfolioSidebar] Disconnecting Sepolia wallet (Privy logout)...');
+            await logout();
+            console.log('✅ [PortfolioSidebar] Sepolia wallet disconnected');
+            toast.success('Sepolia wallet disconnected');
+        } catch (error) {
+            console.error('❌ [PortfolioSidebar] Error disconnecting Sepolia:', error);
+            toast.error('Failed to disconnect Sepolia wallet');
+        }
+    };
 
     // Get all tokens from API
     const { tokens: apiTokens, isLoading: tokensLoading } = useTokens();
@@ -127,8 +231,15 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                     >
                         {/* Zenigma Wallet Card */}
                         <Popover.Root>
-                            <Popover.Trigger asChild>
-                                <div className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer data-[state=open]:border-gray-600">
+                            <Popover.Trigger asChild disabled={!zenigmaAddress}>
+                                <div
+                                    onClick={!zenigmaAddress ? handleZenigmaConnect : undefined}
+                                    className={`flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-800 transition-colors ${
+                                        zenigmaAddress
+                                            ? 'hover:border-gray-700 cursor-pointer data-[state=open]:border-gray-600'
+                                            : 'cursor-pointer hover:border-blue-500/50 hover:bg-gray-900/70'
+                                    }`}
+                                >
                                     <div className="flex items-center space-x-3">
                                         <div className="w-9 h-9 rounded-lg bg-gray-800 flex items-center justify-center">
                                             <span className="text-white font-bold text-lg">Z</span>
@@ -136,14 +247,16 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                         <div>
                                             <div className="text-white font-medium text-sm">Zenigma Wallet</div>
                                             <div className="text-gray-500 text-xs">
-                                                {zenigmaAddress ? formatAddress(zenigmaAddress) : 'Not connected'}
+                                                {zenigmaAddress ? formatAddress(zenigmaAddress) : 'Click to initialize'}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col text-gray-500">
-                                        <ChevronUp size={14} />
-                                        <ChevronDown size={14} className="-mt-1" />
-                                    </div>
+                                    {zenigmaAddress && (
+                                        <div className="flex flex-col text-gray-500">
+                                            <ChevronUp size={14} />
+                                            <ChevronDown size={14} className="-mt-1" />
+                                        </div>
+                                    )}
                                 </div>
                             </Popover.Trigger>
                             <Popover.Portal>
@@ -182,7 +295,10 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                                     </button>
                                                 </Popover.Close>
                                                 <Popover.Close asChild>
-                                                    <button className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none">
+                                                    <button
+                                                        onClick={handleZenigmaDisconnect}
+                                                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-red-900/20 hover:text-red-400 transition-colors outline-none"
+                                                    >
                                                         <X size={16} className="text-gray-400" />
                                                         <span className="text-white text-sm">Disconnect</span>
                                                     </button>
@@ -197,8 +313,15 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
 
                         {/* Sepolia Wallet Card */}
                         <Popover.Root>
-                            <Popover.Trigger asChild>
-                                <div className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-800 hover:border-gray-700 transition-colors cursor-pointer data-[state=open]:border-gray-600">
+                            <Popover.Trigger asChild disabled={!privyWalletAddress}>
+                                <div
+                                    onClick={!privyWalletAddress ? handleSepoliaConnect : undefined}
+                                    className={`flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-800 transition-colors ${
+                                        privyWalletAddress
+                                            ? 'hover:border-gray-700 cursor-pointer data-[state=open]:border-gray-600'
+                                            : 'cursor-pointer hover:border-blue-500/50 hover:bg-gray-900/70'
+                                    }`}
+                                >
                                     <div className="flex items-center space-x-3">
                                         <div className="w-9 h-9 rounded-lg bg-[#213147] flex items-center justify-center overflow-hidden">
                                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -209,14 +332,16 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                         <div>
                                             <div className="text-white font-medium text-sm">Sepolia Wallet</div>
                                             <div className="text-gray-500 text-xs">
-                                                {privyWalletAddress ? formatAddress(privyWalletAddress) : 'Not connected'}
+                                                {privyWalletAddress ? formatAddress(privyWalletAddress) : 'Click to connect'}
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col text-gray-500">
-                                        <ChevronUp size={14} />
-                                        <ChevronDown size={14} className="-mt-1" />
-                                    </div>
+                                    {privyWalletAddress && (
+                                        <div className="flex flex-col text-gray-500">
+                                            <ChevronUp size={14} />
+                                            <ChevronDown size={14} className="-mt-1" />
+                                        </div>
+                                    )}
                                 </div>
                             </Popover.Trigger>
                             <Popover.Portal>
@@ -255,7 +380,10 @@ const PortfolioSidebar = ({ isOpen, onClose }: PortfolioSidebarProps) => {
                                                     </button>
                                                 </Popover.Close>
                                                 <Popover.Close asChild>
-                                                    <button className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-gray-800 transition-colors outline-none">
+                                                    <button
+                                                        onClick={handleSepoliaDisconnect}
+                                                        className="w-full flex items-center space-x-3 px-3 py-2.5 hover:bg-red-900/20 hover:text-red-400 transition-colors outline-none"
+                                                    >
                                                         <X size={16} className="text-gray-400" />
                                                         <span className="text-white text-sm">Disconnect</span>
                                                     </button>
