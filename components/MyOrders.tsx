@@ -616,16 +616,16 @@ const MyOrders = () => {
                     Asset
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Order Value
+                    Size
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Price [USDT]
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Size
+                    Order Value
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Filled
+                    Filled [%]
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                     Time
@@ -714,13 +714,13 @@ const MyOrders = () => {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                          ${order.order_value?.toFixed(2) || '0.00'}
+                          {order.size}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
                           {order.price || '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                          {order.size}
+                          ${order.order_value?.toFixed(2) || '0.00'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
                           {order.filled}
@@ -791,9 +791,9 @@ const MyOrders = () => {
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Order Value
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Filled [%]
-                      </th>
+                      {/*<th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">*/}
+                      {/*  Filled [%]*/}
+                      {/*</th>*/}
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Time
                       </th>
@@ -878,9 +878,9 @@ const MyOrders = () => {
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
                               ${ order && order.matched_price && order.matched_quantity ? Number(order.matched_price * order.matched_quantity).toFixed(2) : '0.00' }
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              100
-                            </td>
+                            {/*<td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">*/}
+                            {/*  100*/}
+                            {/*</td>*/}
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-400">
                               {orderTime}
                             </td>
