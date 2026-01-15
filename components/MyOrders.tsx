@@ -404,7 +404,7 @@ const MyOrders = () => {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              History Orders
+              Order History
               {activeTab === 'history' && (
                 <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
               )}
@@ -827,17 +827,17 @@ const MyOrders = () => {
                     ) : (
                       historyOrders.map((order, index) => {
                         const tokenInfo = tokens.find(t => t.index === order.asset);
-                        const assetSymbol = tokenInfo?.symbol || getSymbol(order.asset);
-                        const isBuy = order.side === 0;
+                        const assetSymbol = order.market || 'UNKOWN'
+                        const isBuy = order.side === 'buy';
 
                         const statusFromAPI = order.status;
                         const statusConfig = ORDER_STATUS[statusFromAPI as keyof typeof ORDER_STATUS] || {
                           label: statusFromAPI || 'Unknown',
-                          color: 'text-gray-400',
-                          dotColor: 'text-gray-400 fill-gray-400'
+                          color: 'text-green-400',
+                          dotColor: 'text-green-400 fill-green-400'
                         };
 
-                        const orderTime = new Date(order.time).toLocaleDateString('en-US', {
+                        const orderTime = new Date(order.timestamp).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
@@ -853,7 +853,7 @@ const MyOrders = () => {
                           >
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`text-sm font-medium ${statusConfig.color}`}>
-                                {statusConfig.label}
+                                Success
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -863,23 +863,22 @@ const MyOrders = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                <TokenIconBySymbol symbol={assetSymbol} size="sm" />
                                 <span className="text-sm font-medium text-white">
                                   {assetSymbol}
                                 </span>
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              ${order.order_value?.toFixed(2) || '0.00'}
+                              ${ order && order.matched_price && order.matched_quantity ? Number(order.matched_price * order.matched_quantity).toFixed(2) : '0.00' }
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              {order.price || '-'}
+                              {order?.matched_price || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              {order.size}
+                              {order?.matched_quantity}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              {order.filled}
+                              100%
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-400">
                               {orderTime}
