@@ -783,16 +783,16 @@ const MyOrders = () => {
                         Asset
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Order Value
-                      </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Price [USDT]
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Size
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Filled
+                        Order Value
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
+                        Filled [%]
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">
                         Time
@@ -868,9 +868,7 @@ const MyOrders = () => {
                                 </span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              ${ order && order.matched_price && order.matched_quantity ? Number(order.matched_price * order.matched_quantity).toFixed(2) : '0.00' }
-                            </td>
+
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
                               {order?.matched_price || '-'}
                             </td>
@@ -878,7 +876,10 @@ const MyOrders = () => {
                               {order?.matched_quantity}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                              100%
+                              ${ order && order.matched_price && order.matched_quantity ? Number(order.matched_price * order.matched_quantity).toFixed(2) : '0.00' }
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                              100
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-400">
                               {orderTime}
