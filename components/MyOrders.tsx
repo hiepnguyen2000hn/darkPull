@@ -581,14 +581,14 @@ const MyOrders = () => {
             </div>
 
             {/* Cancel Selected Button */}
-            {selectedOrders.size > 0 && (
-              <button
-                onClick={handleCancelSelectedOrders}
-                className="px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-sm text-red-500 hover:bg-red-600/30 transition-colors"
-              >
-                Cancel {selectedOrders.size} {selectedOrders.size === 1 ? 'order' : 'orders'}
-              </button>
-            )}
+            {/*{selectedOrders.size > 0 && (*/}
+            {/*  <button*/}
+            {/*    onClick={handleCancelSelectedOrders}*/}
+            {/*    className="px-4 py-2 bg-red-600/20 border border-red-600/50 rounded-lg text-sm text-red-500 hover:bg-red-600/30 transition-colors"*/}
+            {/*  >*/}
+            {/*    Cancel {selectedOrders.size} {selectedOrders.size === 1 ? 'order' : 'orders'}*/}
+            {/*  </button>*/}
+            {/*)}*/}
           </div>
         </div>
 
